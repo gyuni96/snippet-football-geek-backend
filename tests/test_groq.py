@@ -146,7 +146,10 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(summary["confidence_label"], "reporter_claim")
         self.assertEqual(summary["category"], "transfer")
         self.assertIn("Clean retweets", client.messages[0]["content"])
-        self.assertIn("Do not quote the full tweet verbatim", client.messages[0]["content"])
+        self.assertIn("Do not quote the full tweet", client.messages[0]["content"])
+        self.assertIn("Return valid JSON only", client.messages[0]["content"])
+        self.assertIn("Never use generic headlines", client.messages[0]["content"])
+        self.assertIn("weak social signal", client.messages[0]["content"])
         self.assertIn("RT @David_Ornstein", client.messages[1]["content"])
 
     def test_summarize_social_post_with_groq_restores_known_proper_names(self):
@@ -163,7 +166,7 @@ class GroqTest(unittest.TestCase):
         client = FakeGroqClient(
             {
                 "headline_ko": "제임스 피어스, 리오 응구모하 관련 보도 공유",
-                "body_ko": "제임스 피어스가 데이비드 온스테인의 보도를 공유하며 리오 응구모하 관련 흐름을 전했습니다. 슬롯과 이라올라, 팔리스, 레버쿠젠도 언급됐습니다.",
+                "body_ko": "제임스 피어스가 데이비드 오르니스타인의 보도를 공유하며 리오 응구모하 관련 흐름을 전했습니다. 피에데리코 키에사와 파브리치오 로마노, 슬롯과 이라올라, 팔리스, 레버쿠젠도 언급됐습니다.",
                 "confidence_label": "reporter_claim",
                 "category": "transfer",
             }
@@ -176,10 +179,64 @@ class GroqTest(unittest.TestCase):
         self.assertIn("James Pearce", summary["body_ko"])
         self.assertIn("David Ornstein", summary["body_ko"])
         self.assertIn("Rio Ngumoha", summary["body_ko"])
+        self.assertIn("Federico Chiesa", summary["body_ko"])
+        self.assertIn("Fabrizio Romano", summary["body_ko"])
         self.assertIn("Arne Slot", summary["body_ko"])
         self.assertIn("Andoni Iraola", summary["body_ko"])
         self.assertIn("Crystal Palace", summary["body_ko"])
         self.assertIn("Leverkusen", summary["body_ko"])
+
+    def test_summarize_social_post_with_groq_falls_back_from_generic_summary(self):
+        post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="LFCTransferRoom",
+            external_post_id="post-1",
+            author_handle="LFCTransferRoom",
+            text="🚨 Federico Chiesa opens possibility to Liverpool exit.",
+            url="https://x.com/LFCTransferRoom/status/post-1",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "LFCTransferRoom 기자 신호",
+                "body_ko": "LFCTransferRoom가 X에서 리버풀 관련 소식을 공유했습니다. 원문 확인이 필요합니다.",
+                "confidence_label": "reporter_claim",
+                "category": "transfer",
+            }
+        )
+
+        summary = summarize_social_post_with_groq(post, client)
+
+        self.assertEqual(summary["headline_ko"], "Federico Chiesa 관련 X 보도")
+        self.assertEqual(summary["body_ko"], "LFCTransferRoom가 X에서 Federico Chiesa 관련 흐름을 전했습니다.")
+        self.assertEqual(summary["category"], "transfer")
+
+    def test_summarize_social_post_with_groq_marks_emoji_only_post_as_weak_signal(self):
+        post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="LFCTransferRoom",
+            external_post_id="post-1",
+            author_handle="LFCTransferRoom",
+            text="😐",
+            url="https://x.com/LFCTransferRoom/status/post-1",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "새 소식 없음",
+                "body_ko": "LFCTransferRoom이 새 소식을 공유하지 않음",
+                "confidence_label": "reporter_claim",
+                "category": "etc",
+            }
+        )
+
+        summary = summarize_social_post_with_groq(post, client)
+
+        self.assertEqual(summary["headline_ko"], "LFCTransferRoom의 약한 X 반응")
+        self.assertEqual(summary["body_ko"], "LFCTransferRoom가 구체적인 새 정보 없이 짧은 반응을 남겼습니다.")
+        self.assertEqual(summary["category"], "etc")
 
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}

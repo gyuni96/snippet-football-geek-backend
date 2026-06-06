@@ -116,17 +116,16 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
             "role": "system",
             "content": (
                 "You are a Korean football editor writing concise Liverpool fan briefings from X posts. "
-                "Return only JSON with keys headline_ko, body_ko, confidence_label, category. "
-                "Clean retweets, mentions, emojis, tracking links, and line breaks into readable context. "
-                "Do not quote the full tweet verbatim. Summarize what the post signals and who is claiming it. "
-                "Keep player, club, manager, journalist, and publication names in original Latin spelling. "
-                "Use natural Korean and avoid awkward translated names. "
-                "Do not use Hanja, Kanji, Hanzi, Kana, Thai, Cyrillic, Greek, Arabic, Hebrew, or other non-Korean and non-Latin scripts. "
-                "Never treat a repost, rumor, journalist claim, or report as official confirmation. "
-                "If it is a retweet, explain it as the source sharing or amplifying another reporter's claim. "
-                "Only use facts present in the provided post text and metadata. Ignore clues from URLs. "
-                "confidence_label must be reporter_claim unless the post clearly says it is official. "
-                "category must be exactly one of: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
+                "Return valid JSON only, no markdown, no extra text. "
+                "Schema: {\"headline_ko\":\"...\",\"body_ko\":\"...\",\"confidence_label\":\"reporter_claim\",\"category\":\"transfer\"}. "
+                "headline_ko: concrete news/event headline, not a source label. Never use generic headlines like 기자 신호, 리버풀 관련 소식, 새 소식 없음, 원문 확인 필요. "
+                "body_ko: one compact Korean sentence explaining who posted it and what was claimed or shared. "
+                "Clean retweets, mentions, emojis, tracking links, and line breaks. Do not quote the full tweet. "
+                "If the post is only an emoji, reaction, vague reply, or bare link, use category etc and describe it as a weak social signal. "
+                "Keep proper names in Latin spelling: players, clubs, managers, journalists, publications. "
+                "Use only facts from the post text and metadata. Ignore URL clues. Do not present claims as official confirmation. "
+                "confidence_label must be one of: official, reporter_claim, rumor, unconfirmed. "
+                "category must be one of: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
             ),
         },
         {
@@ -148,6 +147,8 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
     }
     result = _restore_known_proper_names(result)
     if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
+        return _fallback_social_post_summary(post, result)
+    if _has_generic_social_headline(result["headline_ko"]) or _has_generic_social_body(result["body_ko"]):
         return _fallback_social_post_summary(post, result)
     return result
 
@@ -199,9 +200,13 @@ def _restore_known_proper_names(summary: Dict[str, str]) -> Dict[str, str]:
         "제임스 피어스": "James Pearce",
         "데이비드 온스테인": "David Ornstein",
         "데이비드 오른스틴": "David Ornstein",
+        "데이비드 오른스타인": "David Ornstein",
+        "데이비드 오르니스타인": "David Ornstein",
         "리오 응구모하": "Rio Ngumoha",
         "커티스 존스": "Curtis Jones",
         "페데리코 키에사": "Federico Chiesa",
+        "피에데리코 키에사": "Federico Chiesa",
+        "파브리치오 로마노": "Fabrizio Romano",
         "유르겐 클롭": "Jurgen Klopp",
         "위르겐 클롭": "Jurgen Klopp",
         "비르질 판 데이크": "Virgil van Dijk",
@@ -267,9 +272,73 @@ def _article_fallback_subject(article: Article) -> str:
 
 
 def _fallback_social_post_summary(post: SocialPost, summary: Dict[str, str]) -> Dict[str, str]:
+    clean_text = _clean_social_text(post.text)
+    subject = _social_fallback_subject(post, clean_text)
+    if _is_weak_social_signal(clean_text):
+        headline = f"{post.source_name}의 약한 X 반응"
+        body = f"{post.source_name}가 구체적인 새 정보 없이 짧은 반응을 남겼습니다."
+    else:
+        headline = f"{subject} 관련 X 보도"
+        body = f"{post.source_name}가 X에서 {subject} 관련 흐름을 전했습니다."
     return {
-        "headline_ko": f"{post.source_name} 기자 신호",
-        "body_ko": f"{post.source_name}가 X에서 리버풀 관련 소식을 공유했습니다. 원문 확인이 필요합니다.",
+        "headline_ko": headline,
+        "body_ko": body,
         "confidence_label": summary["confidence_label"],
         "category": summary["category"],
     }
+
+
+def _has_generic_social_headline(value: str) -> bool:
+    generic_patterns = (
+        "기자 신호",
+        "리버풀 관련 소식",
+        "새 소식 없음",
+        "원문 확인",
+        "x에서 리버풀",
+    )
+    lowered = value.lower()
+    return any(pattern in lowered for pattern in generic_patterns)
+
+
+def _has_generic_social_body(value: str) -> bool:
+    generic_patterns = (
+        "원문 확인이 필요",
+        "새 소식을 공유하지 않",
+        "리버풀 관련 소식을 공유했습니다",
+    )
+    lowered = value.lower()
+    return any(pattern in lowered for pattern in generic_patterns)
+
+
+def _clean_social_text(value: str) -> str:
+    text = value.replace("\n", " ")
+    text = " ".join(part for part in text.split() if not part.startswith("http"))
+    return " ".join(text.split()).strip()
+
+
+def _is_weak_social_signal(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped:
+        return True
+    meaningful = [character for character in stripped if character.isalnum()]
+    return len(meaningful) < 4
+
+
+def _social_fallback_subject(post: SocialPost, clean_text: str) -> str:
+    known_subjects = [
+        "Rio Ngumoha",
+        "Curtis Jones",
+        "Federico Chiesa",
+        "Cody Gakpo",
+        "Jurgen Klopp",
+        "Real Madrid",
+        "Andoni Iraola",
+        "Arne Slot",
+        "Bradley Barcola",
+        "Liverpool",
+    ]
+    haystack = f"{post.source_name} {post.author_handle} {clean_text}".lower()
+    for subject in known_subjects:
+        if subject.lower() in haystack:
+            return subject
+    return "Liverpool"
