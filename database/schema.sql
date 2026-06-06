@@ -101,6 +101,21 @@ create policy briefing_items_public_select
     to anon, authenticated
     using (true);
 
+create or replace view public.latest_team_briefings
+with (security_invoker = true)
+as
+select distinct on (team_slug)
+    id,
+    team_slug,
+    briefing_type,
+    title,
+    summary_ko,
+    published_at,
+    created_at,
+    updated_at
+from public.briefings
+order by team_slug, published_at desc;
+
 -- 최신 소식 서비스 정책: 기본적으로 7일이 지난 브리핑은 삭제합니다.
 -- GitHub Actions나 Supabase scheduled job에서 주기적으로 실행하면 됩니다.
 delete from public.briefings

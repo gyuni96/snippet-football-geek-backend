@@ -25,6 +25,9 @@ class DatabaseSchemaTest(unittest.TestCase):
         self.assertIn("create policy briefings_public_select", content)
         self.assertIn("create policy briefing_items_public_select", content)
         self.assertIn("create trigger set_briefings_updated_at", content)
+        self.assertIn("create or replace view public.latest_team_briefings", content)
+        self.assertIn("with (security_invoker = true)", content)
+        self.assertIn("distinct on (team_slug)", content)
         self.assertIn("delete from public.briefings", content)
 
 
