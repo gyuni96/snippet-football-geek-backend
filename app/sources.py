@@ -111,7 +111,7 @@ LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
     "i_an_doyle": XProfileConfig(
         key="i_an_doyle",
         name="Ian Doyle",
-        handle="i_an_doyle",
+        handle="IanDoyleSport",
         profile_url="https://x.com/IanDoyleSport",
         description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
     ),

@@ -63,11 +63,13 @@ class SourcesTest(unittest.TestCase):
         self.assertIn("david_ornstein", LIVERPOOL_X_PROFILES)
         self.assertIn("james_pearce", LIVERPOOL_X_PROFILES)
         self.assertIn("fabrizio_romano", LIVERPOOL_X_PROFILES)
+        self.assertIn("i_an_doyle", LIVERPOOL_X_PROFILES)
         self.assertIn("lfc_transfer_room", LIVERPOOL_X_PROFILES)
         self.assertEqual(get_x_profile("paul_joyce").handle, "_pauljoyce")
         self.assertEqual(get_x_profile("david_ornstein").handle, "David_Ornstein")
         self.assertEqual(get_x_profile("james_pearce").handle, "JamesPearceLFC")
         self.assertEqual(get_x_profile("fabrizio_romano").handle, "FabrizioRomano")
+        self.assertEqual(get_x_profile("i_an_doyle").handle, "IanDoyleSport")
         self.assertEqual(get_x_profile("lfc_transfer_room").handle, "LFCTransferRoom")
 
     def test_iter_collectable_x_profiles_supports_group_key(self):
@@ -77,6 +79,7 @@ class SourcesTest(unittest.TestCase):
         self.assertIn("david_ornstein", profile_keys)
         self.assertIn("james_pearce", profile_keys)
         self.assertIn("fabrizio_romano", profile_keys)
+        self.assertIn("i_an_doyle", profile_keys)
         self.assertIn("lfc_transfer_room", profile_keys)
 
 
