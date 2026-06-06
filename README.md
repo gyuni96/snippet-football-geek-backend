@@ -119,6 +119,8 @@ python3 -m app.jobs.run_briefing \
   --save-supabase
 ```
 
+`--save-supabase`를 사용하면서 `--since`를 직접 지정하지 않으면 Supabase에 저장된 해당 팀의 최신 브리핑 `published_at`을 기준으로 새 소식만 처리합니다. 새 항목이 없으면 빈 브리핑은 저장하지 않고 콘솔 출력만 남깁니다.
+
 콘솔 출력과 Supabase 저장 payload는 아래 구조를 유지합니다.
 
 - `team_slug`, `briefing_type`, `title`, `summary_ko`, `published_at`

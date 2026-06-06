@@ -6,7 +6,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from app.jobs.run_briefing import run_pipeline
+from app.jobs.run_briefing import resolve_since_text, run_pipeline, should_save_payload_to_supabase
+from app.models import BriefingPayload
 
 
 class RunBriefingCliTest(unittest.TestCase):
@@ -202,6 +203,61 @@ class RunBriefingCliTest(unittest.TestCase):
         )
 
         self.assertIn("--save-supabase", completed.stdout)
+
+    def test_resolve_since_text_uses_latest_supabase_briefing_when_saving(self):
+        class FakeClient:
+            pass
+
+        client = FakeClient()
+        with patch(
+            "app.jobs.run_briefing.fetch_latest_briefing_published_at",
+            return_value="2026-06-06T09:00:00+00:00",
+        ) as fetch_latest:
+            since_text = resolve_since_text(
+                team_slug="liverpool",
+                briefing_type="afternoon",
+                explicit_since_text=None,
+                state_file=None,
+                save_supabase=True,
+                supabase_client=client,
+            )
+
+        self.assertEqual(since_text, "2026-06-06T09:00:00+00:00")
+        fetch_latest.assert_called_once_with(
+            client,
+            team_slug="liverpool",
+        )
+
+    def test_resolve_since_text_keeps_explicit_since_over_supabase_latest(self):
+        class FakeClient:
+            pass
+
+        with patch("app.jobs.run_briefing.fetch_latest_briefing_published_at") as fetch_latest:
+            since_text = resolve_since_text(
+                team_slug="liverpool",
+                briefing_type="afternoon",
+                explicit_since_text="2026-06-06T08:00:00Z",
+                state_file=None,
+                save_supabase=True,
+                supabase_client=FakeClient(),
+            )
+
+        self.assertEqual(since_text, "2026-06-06T08:00:00Z")
+        fetch_latest.assert_not_called()
+
+    def test_should_not_save_empty_payload_to_supabase(self):
+        from datetime import datetime, timezone
+
+        payload = BriefingPayload(
+            team_slug="liverpool",
+            briefing_type="afternoon",
+            title="리버풀 오후 브리핑",
+            summary_ko="출근길에 확인할 리버풀 핵심 소식 0건입니다.",
+            published_at=datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc),
+            items=[],
+        )
+
+        self.assertFalse(should_save_payload_to_supabase(payload))
 
 
 def _sample_raw_item(

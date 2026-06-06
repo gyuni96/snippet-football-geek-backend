@@ -1,6 +1,7 @@
 """Supabase REST API에 브리핑 payload를 저장합니다."""
 
 import json
+from urllib.parse import urlencode
 from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -33,6 +34,17 @@ class SupabaseClient:
                 "POST",
                 self._headers(),
                 json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            )
+        except HTTPError as error:
+            raise SupabaseAPIError(_format_http_error(error)) from error
+
+    def get(self, path: str) -> Any:
+        try:
+            return self.http_request(
+                f"{self.base_url}/rest/v1/{path.lstrip('/')}",
+                "GET",
+                self._headers(),
+                None,
             )
         except HTTPError as error:
             raise SupabaseAPIError(_format_http_error(error)) from error
@@ -72,6 +84,24 @@ def save_briefing_payload(payload: BriefingPayload, client: SupabaseClient) -> s
         )
 
     return str(briefing_id)
+
+
+def fetch_latest_briefing_published_at(
+    client: SupabaseClient,
+    team_slug: str,
+) -> Optional[str]:
+    query = urlencode(
+        {
+            "select": "published_at",
+            "team_slug": f"eq.{team_slug}",
+            "order": "published_at.desc",
+            "limit": "1",
+        }
+    )
+    rows = client.get(f"briefings?{query}")
+    if not rows:
+        return None
+    return str(rows[0]["published_at"])
 
 
 def _briefing_item_row(briefing_id: str, sort_order: int, item: Dict[str, Any]) -> Dict[str, Any]:

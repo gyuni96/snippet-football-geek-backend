@@ -23,7 +23,7 @@ from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
 from app.sources import iter_collectable_sources
 from app.state import load_last_success_at, save_last_success_at
-from app.supabase import SupabaseClient, save_briefing_payload
+from app.supabase import SupabaseClient, fetch_latest_briefing_published_at, save_briefing_payload
 
 
 def main() -> None:
@@ -49,13 +49,22 @@ def main() -> None:
     args = parser.parse_args()
 
     load_env_file()
+    supabase_client = build_supabase_client_from_env() if args.save_supabase else None
+    since_text = resolve_since_text(
+        team_slug=args.team,
+        briefing_type=args.briefing_type,
+        explicit_since_text=args.since_text,
+        state_file=Path(args.state_file) if args.state_file else None,
+        save_supabase=args.save_supabase,
+        supabase_client=supabase_client,
+    )
     payload = run_pipeline(
         team_slug=args.team,
         briefing_type=args.briefing_type,
         rss_url=args.rss_url,
         rss_source_name=args.rss_source_name,
         source_keys=args.source_keys or None,
-        since_text=args.since_text,
+        since_text=since_text,
         retention_days=args.retention_days,
         state_file=Path(args.state_file) if args.state_file else None,
         use_groq=args.use_groq,
@@ -63,8 +72,8 @@ def main() -> None:
         groq_model=args.groq_model,
         limit=args.limit,
     )
-    if args.save_supabase:
-        save_payload_to_supabase(payload)
+    if args.save_supabase and should_save_payload_to_supabase(payload):
+        save_payload_to_supabase(payload, client=supabase_client)
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
 
@@ -181,13 +190,36 @@ def build_article_summarizer(api_key: str, model: str) -> Callable[[Article], di
     return lambda article: summarize_article_with_groq(article, client)
 
 
-def save_payload_to_supabase(payload) -> str:
+def resolve_since_text(
+    team_slug: str,
+    briefing_type: str,
+    explicit_since_text: Optional[str],
+    state_file: Optional[Path],
+    save_supabase: bool,
+    supabase_client: Optional[SupabaseClient],
+) -> Optional[str]:
+    if explicit_since_text or state_file is not None or not save_supabase or supabase_client is None:
+        return explicit_since_text
+    return fetch_latest_briefing_published_at(
+        supabase_client,
+        team_slug=team_slug,
+    )
+
+
+def build_supabase_client_from_env() -> SupabaseClient:
     base_url = os.environ.get("SUPABASE_URL")
     service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not base_url or not service_role_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required when --save-supabase is enabled.")
+    return SupabaseClient(base_url=base_url, service_role_key=service_role_key)
 
-    client = SupabaseClient(base_url=base_url, service_role_key=service_role_key)
+
+def should_save_payload_to_supabase(payload) -> bool:
+    return bool(payload.items)
+
+
+def save_payload_to_supabase(payload, client: Optional[SupabaseClient] = None) -> str:
+    client = client or build_supabase_client_from_env()
     return save_briefing_payload(payload, client)
 
 

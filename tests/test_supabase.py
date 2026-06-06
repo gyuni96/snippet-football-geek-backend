@@ -3,7 +3,7 @@ import json
 import unittest
 
 from app.models import BriefingItem, BriefingPayload
-from app.supabase import SupabaseClient, save_briefing_payload
+from app.supabase import SupabaseClient, fetch_latest_briefing_published_at, save_briefing_payload
 
 
 class SupabaseClientTest(unittest.TestCase):
@@ -63,6 +63,32 @@ class SupabaseClientTest(unittest.TestCase):
         self.assertEqual(requests[1]["body"][0]["sort_order"], 0)
         self.assertEqual(requests[1]["body"][0]["item_type"], "article")
         self.assertEqual(requests[1]["body"][0]["category"], "transfer")
+
+    def test_fetch_latest_briefing_published_at_reads_most_recent_row(self):
+        requests = []
+
+        def fake_http_request(url, method, headers, body):
+            requests.append({"url": url, "method": method, "body": body})
+            return [{"published_at": "2026-06-06T09:00:00+00:00"}]
+
+        client = SupabaseClient(
+            base_url="https://example.supabase.co",
+            service_role_key="service-key",
+            http_request=fake_http_request,
+        )
+
+        published_at = fetch_latest_briefing_published_at(
+            client,
+            team_slug="liverpool",
+        )
+
+        self.assertEqual(published_at, "2026-06-06T09:00:00+00:00")
+        self.assertEqual(requests[0]["method"], "GET")
+        self.assertIsNone(requests[0]["body"])
+        self.assertIn("/rest/v1/briefings?", requests[0]["url"])
+        self.assertIn("team_slug=eq.liverpool", requests[0]["url"])
+        self.assertNotIn("briefing_type=eq.", requests[0]["url"])
+        self.assertIn("order=published_at.desc", requests[0]["url"])
 
 
 if __name__ == "__main__":
