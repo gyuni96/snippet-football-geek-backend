@@ -71,7 +71,7 @@ def build_discord_run_message(
         fields.append({"name": "GitHub Actions", "value": github_run_url, "inline": False})
     if x_auth_issue_handles:
         handles = ", ".join(f"@{handle}" for handle in x_auth_issue_handles)
-        fields.append({"name": "X 인증 상태", "value": f"토큰/쿠키 만료 의심: {handles}", "inline": False})
+        fields.append({"name": "⚠️ X 인증 상태", "value": f"⚠️ 토큰/쿠키 만료 의심: {handles}", "inline": False})
     if error_message:
         fields.append({"name": "오류", "value": _trim_discord_field(error_message), "inline": False})
 

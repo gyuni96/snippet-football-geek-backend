@@ -42,7 +42,7 @@ class DiscordNotificationTest(unittest.TestCase):
         self.assertEqual(fields["저장"], "briefing-1")
         self.assertEqual(fields["소스"], "all")
         self.assertEqual(fields["GitHub Actions"], "https://github.com/example/repo/actions/runs/1")
-        self.assertEqual(fields["X 인증 상태"], "토큰/쿠키 만료 의심: @JamesPearceLFC, @FabrizioRomano")
+        self.assertEqual(fields["⚠️ X 인증 상태"], "⚠️ 토큰/쿠키 만료 의심: @JamesPearceLFC, @FabrizioRomano")
 
     def test_builds_failed_message_with_error_text(self):
         message = build_discord_run_message(
