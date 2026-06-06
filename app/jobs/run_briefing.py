@@ -8,6 +8,7 @@
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Tuple
@@ -15,6 +16,7 @@ from typing import Callable, Iterable, List, Optional, Tuple
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
 from app.collectors.x_profiles import (
+    XProfileCollectionError,
     build_playwright_post_provider,
     build_snscrape_post_provider,
     build_twikit_post_provider,
@@ -207,13 +209,19 @@ def collect_raw_items(
             cookies_file=x_cookies_file,
         )
         for profile in iter_collectable_x_profiles(source_keys):
-            raw_items.extend(
-                collect_x_profile_items(
-                    profile=profile,
-                    team_slug=team_slug,
-                    post_provider=x_post_provider,
+            try:
+                raw_items.extend(
+                    collect_x_profile_items(
+                        profile=profile,
+                        team_slug=team_slug,
+                        post_provider=x_post_provider,
+                    )
                 )
-            )
+            except XProfileCollectionError as error:
+                print(
+                    f"X collection skipped for @{profile.handle}: {error}",
+                    file=sys.stderr,
+                )
         return raw_items
 
     return sample_raw_items(team_slug)

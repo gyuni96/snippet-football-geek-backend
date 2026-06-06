@@ -2,10 +2,12 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from io import StringIO
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from app.collectors.x_profiles import XProfileCollectionError
 from app.jobs.run_briefing import resolve_since_text, run_pipeline, should_save_payload_to_supabase
 from app.models import BriefingPayload
 
@@ -107,6 +109,29 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_type, "social_post")
         self.assertEqual(payload.items[0].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
+
+    def test_run_pipeline_keeps_rss_items_when_x_collection_fails(self):
+        rss_item = _sample_raw_item()
+        stderr = StringIO()
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=[rss_item]):
+            with patch(
+                "app.jobs.run_briefing.collect_x_profile_items",
+                side_effect=XProfileCollectionError("X login blocked"),
+            ):
+                with patch("sys.stderr", stderr):
+                    payload = run_pipeline(
+                        team_slug="liverpool",
+                        briefing_type="morning",
+                        source_keys=["liverpool_echo", "x_reporters"],
+                        retention_days=7,
+                        now_text="2026-06-06T12:00:00Z",
+                    )
+
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_urls, ["https://example.com/liverpool-story"])
+        self.assertIn("X collection skipped", stderr.getvalue())
+        self.assertIn("X login blocked", stderr.getvalue())
 
     def test_cli_supports_x_provider_option(self):
         completed = subprocess.run(
