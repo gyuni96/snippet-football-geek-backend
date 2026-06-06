@@ -6,6 +6,7 @@ Groq의 OpenAI 호환 chat completions endpoint를 감싸고, `Article`을 한�
 """
 
 import json
+import time
 import unicodedata
 from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError
@@ -26,19 +27,41 @@ class GroqAPIError(RuntimeError):
     pass
 
 
+class GroqRateLimiter:
+    """Groq 요청 간격을 제한해 무료/저속 플랜에서 과도한 호출을 피합니다."""
+
+    def __init__(self, requests_per_minute: int):
+        if requests_per_minute <= 0:
+            raise ValueError("requests_per_minute must be positive.")
+        self.min_interval_seconds = 60 / requests_per_minute
+        self.last_request_at = 0.0
+
+    def wait(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self.last_request_at
+        wait_seconds = self.min_interval_seconds - elapsed
+        if wait_seconds > 0:
+            time.sleep(wait_seconds)
+        self.last_request_at = time.monotonic()
+
+
 class GroqClient:
     def __init__(
         self,
         api_key: str,
         model: str = DEFAULT_GROQ_MODEL,
         http_post: Optional[HttpPost] = None,
+        rate_limiter: Optional[GroqRateLimiter] = None,
     ):
         self.api_key = api_key
         self.model = model
         self.http_post = http_post or _http_post_json
+        self.rate_limiter = rate_limiter
 
     def chat_json(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         try:
+            if self.rate_limiter is not None:
+                self.rate_limiter.wait()
             response = self.http_post(
                 GROQ_CHAT_URL,
                 {
@@ -50,17 +73,40 @@ class GroqClient:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.2,
-                    "response_format": {"type": "json_object"},
                 },
             )
         except HTTPError as error:
             raise GroqAPIError(_format_http_error(error)) from error
         content = response["choices"][0]["message"]["content"]
-        return json.loads(content)
+        return _parse_json_object(content)
 
 
 def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[str, str]:
-    messages = [
+    message_sets = [
+        _article_summary_messages(article),
+        _article_retry_messages(article),
+    ]
+    last_error: Optional[Exception] = None
+    for messages in message_sets:
+        try:
+            summary = client.chat_json(messages)
+            result = {
+                "headline_ko": str(summary["headline_ko"]),
+                "body_ko": str(summary["body_ko"]),
+                "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
+                "category": normalize_category(str(summary.get("category", "etc"))),
+            }
+            result = _restore_known_proper_names(result)
+            _ensure_article_summary_quality(result)
+            return result
+        except (GroqAPIError, KeyError, TypeError) as error:
+            last_error = error
+
+    raise GroqAPIError("Groq article summary failed after retry.") from last_error
+
+
+def _article_summary_messages(article: Article) -> List[Dict[str, str]]:
+    return [
         {
             "role": "system",
             "content": (
@@ -92,26 +138,34 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
             ),
         },
     ]
-    summary = client.chat_json(messages)
-    result = {
-        "headline_ko": str(summary["headline_ko"]),
-        "body_ko": str(summary["body_ko"]),
-        "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
-        "category": normalize_category(str(summary.get("category", "etc"))),
-    }
-    result = _restore_known_proper_names(result)
-    if (
-        _contains_disallowed_script(result["headline_ko"])
-        or _contains_disallowed_script(result["body_ko"])
-        or _is_mostly_untranslated_english(result["headline_ko"])
-        or _is_mostly_untranslated_english(result["body_ko"])
-    ):
-        raise GroqAPIError("Groq article summary failed quality checks.")
-    return result
 
 
 def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dict[str, str]:
-    messages = [
+    message_sets = [
+        _social_post_summary_messages(post),
+        _social_post_retry_messages(post),
+    ]
+    last_error: Optional[Exception] = None
+    for messages in message_sets:
+        try:
+            summary = client.chat_json(messages)
+            result = {
+                "headline_ko": str(summary["headline_ko"]),
+                "body_ko": str(summary["body_ko"]),
+                "confidence_label": _normalize_social_confidence_label(str(summary.get("confidence_label", "reporter_claim"))),
+                "category": normalize_category(str(summary.get("category", "etc"))),
+            }
+            result = _restore_known_proper_names(result)
+            _ensure_social_post_summary_quality(result)
+            return result
+        except (GroqAPIError, KeyError, TypeError) as error:
+            last_error = error
+
+    raise GroqAPIError("Groq social post summary failed after retry.") from last_error
+
+
+def _social_post_summary_messages(post: SocialPost) -> List[Dict[str, str]]:
+    return [
         {
             "role": "system",
             "content": (
@@ -138,19 +192,57 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
             ),
         },
     ]
-    summary = client.chat_json(messages)
-    result = {
-        "headline_ko": str(summary["headline_ko"]),
-        "body_ko": str(summary["body_ko"]),
-        "confidence_label": _normalize_social_confidence_label(str(summary.get("confidence_label", "reporter_claim"))),
-        "category": normalize_category(str(summary.get("category", "etc"))),
-    }
-    result = _restore_known_proper_names(result)
-    if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
-        raise GroqAPIError("Groq social post summary failed quality checks.")
-    if _has_generic_social_headline(result["headline_ko"]) or _has_generic_social_body(result["body_ko"]):
-        raise GroqAPIError("Groq social post summary failed quality checks.")
-    return result
+
+
+def _article_retry_messages(article: Article) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Return JSON only. Write natural Korean for Liverpool fans. "
+                "Keys: headline_ko, body_ko, confidence_label, category. "
+                "headline_ko must be a specific Korean headline, not '~관련 소식'. "
+                "body_ko must summarize the actual news in one Korean sentence. "
+                "Keep names such as Liverpool, Jurgen Klopp, Arne Slot, Andoni Iraola, Rio Ngumoha in Latin letters. "
+                "Do not invent facts. Use only the supplied title/body. "
+                "confidence_label: official, reported, rumor, unconfirmed. "
+                "category: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Title: {article.title}\n"
+                f"Body: {article.body[:1600]}\n\n"
+                "Create one concise Korean briefing item."
+            ),
+        },
+    ]
+
+
+def _social_post_retry_messages(post: SocialPost) -> List[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Return JSON only. Write one concise Korean Liverpool briefing item from this X post. "
+                "Keys: headline_ko, body_ko, confidence_label, category. "
+                "Do not use generic headlines like '~관련 X 소식', '기자 신호', or '리버풀 관련 소식'. "
+                "If the post has no concrete claim, set category to etc and write that it is a weak signal. "
+                "Do not quote the full post. Keep proper names in Latin letters. "
+                "confidence_label: official, reporter_claim, rumor, unconfirmed. "
+                "category: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Source: {post.source_name} (@{post.author_handle})\n"
+                f"Post: {post.text[:1200]}\n\n"
+                "Create one Korean briefing item."
+            ),
+        },
+    ]
 
 
 def _http_post_json(url: str, headers: Dict[str, str], body: Dict[str, Any]) -> Dict[str, Any]:
@@ -162,6 +254,23 @@ def _http_post_json(url: str, headers: Dict[str, str], body: Dict[str, Any]) -> 
     )
     with urlopen(request, timeout=60) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def _parse_json_object(content: str) -> Dict[str, Any]:
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        start = content.find("{")
+        end = content.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise GroqAPIError("Groq response was not valid JSON.")
+        try:
+            parsed = json.loads(content[start : end + 1])
+        except json.JSONDecodeError as error:
+            raise GroqAPIError("Groq response was not valid JSON.") from error
+        if not isinstance(parsed, dict):
+            raise GroqAPIError("Groq response JSON was not an object.")
+        return parsed
 
 
 def _format_http_error(error: HTTPError) -> str:
@@ -182,6 +291,25 @@ def _normalize_confidence_label(value: str) -> str:
 def _normalize_social_confidence_label(value: str) -> str:
     allowed = {"official", "reporter_claim", "rumor", "unconfirmed"}
     return value if value in allowed else "reporter_claim"
+
+
+def _ensure_article_summary_quality(summary: Dict[str, str]) -> None:
+    if (
+        _contains_disallowed_script(summary["headline_ko"])
+        or _contains_disallowed_script(summary["body_ko"])
+        or _is_mostly_untranslated_english(summary["headline_ko"])
+        or _is_mostly_untranslated_english(summary["body_ko"])
+        or _has_generic_article_headline(summary["headline_ko"])
+        or _has_generic_article_body(summary["body_ko"])
+    ):
+        raise GroqAPIError("Groq article summary failed quality checks.")
+
+
+def _ensure_social_post_summary_quality(summary: Dict[str, str]) -> None:
+    if _contains_disallowed_script(summary["headline_ko"]) or _contains_disallowed_script(summary["body_ko"]):
+        raise GroqAPIError("Groq social post summary failed quality checks.")
+    if _has_generic_social_headline(summary["headline_ko"]) or _has_generic_social_body(summary["body_ko"]):
+        raise GroqAPIError("Groq social post summary failed quality checks.")
 
 
 def _contains_disallowed_script(value: str) -> bool:
@@ -240,56 +368,36 @@ def _is_mostly_untranslated_english(value: str) -> bool:
     return latin_count >= 25 and hangul_count == 0
 
 
-def _fallback_article_summary(article: Article, summary: Dict[str, str]) -> Dict[str, str]:
-    subject = _article_fallback_subject(article)
-    return {
-        "headline_ko": f"{subject} 관련 리버풀 소식",
-        "body_ko": (
-            f"{article.source_name}가 '{_trim_text(article.title, 80)}' 내용을 전했습니다."
-        ),
-        "confidence_label": summary["confidence_label"],
-        "category": summary["category"],
-    }
+def _has_generic_article_headline(value: str) -> bool:
+    generic_patterns = (
+        "관련 소식",
+        "관련 팀 소식",
+        "관련 이적 소식",
+        "관련 루머 소식",
+        "관련 오피셜 소식",
+        "관련 부상 소식",
+        "리버풀 관련",
+        "원문 확인",
+    )
+    lowered = value.lower()
+    return any(pattern in lowered for pattern in generic_patterns)
 
 
-def _article_fallback_subject(article: Article) -> str:
-    known_subjects = [
-        "Jurgen Klopp",
-        "Real Madrid",
-        "Federico Chiesa",
-        "Curtis Jones",
-        "Andoni Iraola",
-        "Arne Slot",
-        "Virgil van Dijk",
-        "Rio Ngumoha",
-        "Liverpool",
-    ]
-    for subject in known_subjects:
-        if subject.lower() in article.title.lower() or subject.lower() in article.body.lower():
-            return subject
-    return "Liverpool"
-
-
-def _fallback_social_post_summary(post: SocialPost, summary: Dict[str, str]) -> Dict[str, str]:
-    clean_text = _clean_social_text(post.text)
-    subject = _social_fallback_subject(post, clean_text)
-    if _is_weak_social_signal(clean_text):
-        headline = f"{post.source_name}의 X 반응"
-        body = f"{post.source_name}가 구체적인 새 정보 없이 짧은 반응을 남겼습니다."
-    else:
-        headline = f"{subject} 관련 X 업데이트"
-        body = f"{post.source_name}가 X에서 {subject} 관련 내용을 전했습니다."
-    return {
-        "headline_ko": headline,
-        "body_ko": body,
-        "confidence_label": summary["confidence_label"],
-        "category": summary["category"],
-    }
+def _has_generic_article_body(value: str) -> bool:
+    generic_patterns = (
+        "관련 리버풀 소식을 전했습니다",
+        "내용을 전했습니다",
+        "원문 확인이 필요",
+    )
+    lowered = value.lower()
+    return any(pattern in lowered for pattern in generic_patterns)
 
 
 def _has_generic_social_headline(value: str) -> bool:
     generic_patterns = (
         "기자 신호",
+        "관련 x 소식",
+        "관련 x 업데이트",
         "리버풀 관련 소식",
         "새 소식 없음",
         "원문 확인",
@@ -304,6 +412,7 @@ def _has_generic_social_body(value: str) -> bool:
         "원문 확인이 필요",
         "새 소식을 공유하지 않",
         "리버풀 관련 소식을 공유했습니다",
+        "관련 리버풀 소식을 전했습니다",
     )
     lowered = value.lower()
     return any(pattern in lowered for pattern in generic_patterns)
@@ -313,38 +422,3 @@ def _clean_social_text(value: str) -> str:
     text = value.replace("\n", " ")
     text = " ".join(part for part in text.split() if not part.startswith("http"))
     return " ".join(text.split()).strip()
-
-
-def _trim_text(value: str, max_length: int) -> str:
-    compact = " ".join(value.split())
-    if len(compact) <= max_length:
-        return compact
-    return compact[: max_length - 1].rstrip() + "…"
-
-
-def _is_weak_social_signal(value: str) -> bool:
-    stripped = value.strip()
-    if not stripped:
-        return True
-    meaningful = [character for character in stripped if character.isalnum()]
-    return len(meaningful) < 4
-
-
-def _social_fallback_subject(post: SocialPost, clean_text: str) -> str:
-    known_subjects = [
-        "Rio Ngumoha",
-        "Curtis Jones",
-        "Federico Chiesa",
-        "Cody Gakpo",
-        "Jurgen Klopp",
-        "Real Madrid",
-        "Andoni Iraola",
-        "Arne Slot",
-        "Bradley Barcola",
-        "Liverpool",
-    ]
-    haystack = f"{post.source_name} {post.author_handle} {clean_text}".lower()
-    for subject in known_subjects:
-        if subject.lower() in haystack:
-            return subject
-    return "Liverpool"

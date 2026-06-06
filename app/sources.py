@@ -122,13 +122,6 @@ LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
         profile_url="https://x.com/LFCTransferRoom",
         description="리버풀 이적 시장 소식을 전문적으로 다루는 계정으로, 루머와 확인된 이적 뉴스를 제공합니다.",
     ),
-    "anfield_sector": XProfileConfig(
-        key="anfield_sector",
-        name="Anfield Sector",
-        handle="AnfieldSector",
-        profile_url="https://x.com/AnfieldSector",
-        description="리버풀 팬 계정으로, 팀 소식과 팬 관점의 뉴스를 제공합니다.",
-    ),
 }
 
 

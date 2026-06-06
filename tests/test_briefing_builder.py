@@ -87,7 +87,7 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[0].category, "transfer")
 
-    def test_uses_safe_social_post_fallback_when_summarizer_fails(self):
+    def test_skips_social_post_when_summarizer_fails(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
         social_post = SocialPost(
             team_slug="liverpool",
@@ -109,10 +109,7 @@ class BriefingBuilderTest(unittest.TestCase):
             social_post_summarizer=lambda item: (_ for _ in ()).throw(RuntimeError("Groq failed")),
         )
 
-        self.assertEqual(payload.items[0].headline_ko, "Liverpool 관련 X 소식")
-        self.assertEqual(payload.items[0].body_ko, "James Pearce가 X에서 Liverpool 관련 리버풀 소식을 전했습니다.")
-        self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
-        self.assertNotIn("기자 신호", payload.items[0].headline_ko)
+        self.assertEqual(payload.items, [])
 
     def test_skips_low_signal_social_post(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
@@ -194,7 +191,7 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
 
-    def test_uses_safe_article_fallback_when_summarizer_fails(self):
+    def test_skips_article_when_summarizer_fails(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
         article = Article(
             team_slug="liverpool",
@@ -216,10 +213,7 @@ class BriefingBuilderTest(unittest.TestCase):
             article_summarizer=lambda item: (_ for _ in ()).throw(RuntimeError("Groq failed")),
         )
 
-        self.assertEqual(payload.items[0].headline_ko, "Liverpool 관련 이적 소식")
-        self.assertEqual(payload.items[0].body_ko, "Liverpool Echo가 Liverpool 관련 리버풀 소식을 전했습니다.")
-        self.assertEqual(payload.items[0].confidence_label, "reported")
-        self.assertNotIn("Liverpool monitor midfield target", payload.items[0].body_ko)
+        self.assertEqual(payload.items, [])
 
     def test_builds_article_item_with_multiple_sources(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)

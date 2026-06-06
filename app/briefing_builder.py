@@ -118,7 +118,7 @@ def _summarize_article(
     try:
         summary = article_summarizer(article)
     except RuntimeError:
-        return _safe_article_fallback(article)
+        return None
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
@@ -143,7 +143,7 @@ def _summarize_social_post(
     try:
         summary = social_post_summarizer(post)
     except RuntimeError:
-        return _safe_social_post_fallback(post)
+        return None
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
@@ -165,63 +165,8 @@ def _is_low_signal_social_post(post: SocialPost) -> bool:
     return len(meaningful) < 8
 
 
-def _safe_article_fallback(article: Article) -> Dict[str, str]:
-    category = classify_article(article)
-    subject = _subject_from_text(f"{article.title} {article.body}") or "리버풀"
-    return {
-        "headline_ko": f"{subject} 관련 {_fallback_category_phrase(category)}",
-        "body_ko": f"{article.source_name}가 {subject} 관련 리버풀 소식을 전했습니다.",
-        "confidence_label": "reported",
-        "category": category,
-    }
-
-
-def _safe_social_post_fallback(post: SocialPost) -> Optional[Dict[str, str]]:
-    category = classify_social_post(post)
-    clean_text = _clean_social_text(post.text)
-    subject = _subject_from_text(clean_text)
-    if subject is None:
-        return None
-    return {
-        "headline_ko": f"{subject} 관련 X 소식",
-        "body_ko": f"{post.source_name}가 X에서 {subject} 관련 리버풀 소식을 전했습니다.",
-        "confidence_label": "reporter_claim",
-        "category": category,
-    }
-
-
 def _clean_social_text(value: str) -> str:
     text = value.replace("\n", " ")
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"\bRT\s+@", "@", text)
     return " ".join(text.split()).strip()
-
-
-def _fallback_category_phrase(category: str) -> str:
-    label = category_label_ko(category)
-    if label.endswith("소식"):
-        return label
-    return f"{label} 소식"
-
-
-def _subject_from_text(value: str) -> Optional[str]:
-    known_subjects = [
-        "Rio Ngumoha",
-        "Curtis Jones",
-        "Federico Chiesa",
-        "Cody Gakpo",
-        "Jurgen Klopp",
-        "Real Madrid",
-        "Andoni Iraola",
-        "Arne Slot",
-        "Bradley Barcola",
-        "Mohamed Salah",
-        "Virgil van Dijk",
-        "Hugo Ekitike",
-        "Liverpool",
-    ]
-    haystack = value.lower()
-    for subject in known_subjects:
-        if subject.lower() in haystack:
-            return subject
-    return None

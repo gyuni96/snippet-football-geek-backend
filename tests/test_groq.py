@@ -90,7 +90,40 @@ class GroqTest(unittest.TestCase):
 
         with self.assertRaises(GroqAPIError):
             summarize_article_with_groq(article, client)
-        self.assertIn("Thai", client.messages[0]["content"])
+        self.assertIn("Thai", client.message_calls[0][0]["content"])
+
+    def test_summarize_article_with_groq_retries_with_compact_prompt(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Liverpool monitor midfield target",
+            body="Liverpool are watching a midfielder before the summer transfer window.",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            [
+                {
+                    "headline_ko": "Liverpool monitor midfield target",
+                    "body_ko": "Liverpool Echo reports that Liverpool monitor a midfielder.",
+                    "confidence_label": "reported",
+                    "category": "transfer",
+                },
+                {
+                    "headline_ko": "리버풀, 중원 보강 후보 주시",
+                    "body_ko": "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
+                    "confidence_label": "reported",
+                    "category": "transfer",
+                },
+            ]
+        )
+
+        summary = summarize_article_with_groq(article, client)
+
+        self.assertEqual(summary["headline_ko"], "리버풀, 중원 보강 후보 주시")
+        self.assertEqual(len(client.message_calls), 2)
+        self.assertIn("specific Korean headline", client.message_calls[1][0]["content"])
 
     def test_summarize_article_with_groq_rejects_mostly_english_summary(self):
         article = Article(
@@ -203,6 +236,40 @@ class GroqTest(unittest.TestCase):
         with self.assertRaises(GroqAPIError):
             summarize_social_post_with_groq(post, client)
 
+    def test_summarize_social_post_with_groq_retries_with_compact_prompt(self):
+        post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="LFCTransferRoom",
+            external_post_id="post-1",
+            author_handle="LFCTransferRoom",
+            text="🚨 Federico Chiesa opens possibility to Liverpool exit.",
+            url="https://x.com/LFCTransferRoom/status/post-1",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            [
+                {
+                    "headline_ko": "Federico Chiesa 관련 X 소식",
+                    "body_ko": "LFCTransferRoom가 X에서 Federico Chiesa 관련 리버풀 소식을 전했습니다.",
+                    "confidence_label": "reporter_claim",
+                    "category": "transfer",
+                },
+                {
+                    "headline_ko": "Federico Chiesa, 리버풀 이탈 가능성 언급",
+                    "body_ko": "LFCTransferRoom은 Federico Chiesa가 리버풀을 떠날 가능성을 열어뒀다고 전했습니다.",
+                    "confidence_label": "reporter_claim",
+                    "category": "transfer",
+                },
+            ]
+        )
+
+        summary = summarize_social_post_with_groq(post, client)
+
+        self.assertEqual(summary["headline_ko"], "Federico Chiesa, 리버풀 이탈 가능성 언급")
+        self.assertEqual(len(client.message_calls), 2)
+        self.assertIn("Do not use generic headlines", client.message_calls[1][0]["content"])
+
     def test_summarize_social_post_with_groq_marks_emoji_only_post_as_weak_signal(self):
         post = SocialPost(
             team_slug="liverpool",
@@ -259,6 +326,64 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(captured["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(captured["headers"]["User-Agent"], "SnippetFootballGeekBot/0.1")
         self.assertEqual(captured["body"]["model"], "test-model")
+        self.assertNotIn("response_format", captured["body"])
+
+    def test_groq_client_parses_json_object_from_wrapped_text(self):
+        def fake_http_post(url, headers, body):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "Here is JSON:\n"
+                                '{"headline_ko":"헤드라인","body_ko":"본문","confidence_label":"reported","category":"team_news"}'
+                            )
+                        }
+                    }
+                ]
+            }
+
+        client = GroqClient(api_key="test-key", model="test-model", http_post=fake_http_post)
+        content = client.chat_json([{"role": "user", "content": "hello"}])
+
+        self.assertEqual(content["headline_ko"], "헤드라인")
+
+    def test_groq_client_waits_before_request_when_rate_limited(self):
+        calls = []
+
+        class FakeRateLimiter:
+            def wait(self):
+                calls.append("wait")
+
+        def fake_http_post(url, headers, body):
+            calls.append("post")
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "headline_ko": "헤드라인",
+                                    "body_ko": "본문",
+                                    "confidence_label": "reported",
+                                    "category": "team_news",
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        client = GroqClient(
+            api_key="test-key",
+            model="test-model",
+            http_post=fake_http_post,
+            rate_limiter=FakeRateLimiter(),
+        )
+        client.chat_json([{"role": "user", "content": "hello"}])
+
+        self.assertEqual(calls, ["wait", "post"])
 
     def test_groq_client_converts_http_error_to_safe_error_message(self):
         def fake_http_post(url, headers, body):
@@ -281,12 +406,16 @@ class GroqTest(unittest.TestCase):
 
 class FakeGroqClient:
     def __init__(self, response):
-        self.response = response
+        self.responses = response if isinstance(response, list) else [response]
         self.messages = []
+        self.message_calls = []
 
     def chat_json(self, messages):
         self.messages = messages
-        return self.response
+        self.message_calls.append(messages)
+        if len(self.message_calls) <= len(self.responses):
+            return self.responses[len(self.message_calls) - 1]
+        return self.responses[-1]
 
 
 if __name__ == "__main__":

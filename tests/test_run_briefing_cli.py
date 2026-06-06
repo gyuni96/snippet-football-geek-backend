@@ -6,7 +6,7 @@ from io import StringIO
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from app.collectors.x_profiles import XProfileCollectionError
 from app.jobs.run_briefing import (
@@ -359,7 +359,7 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model")
+        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY)
         self.assertEqual(payload.items[0].headline_ko, "그록 헤드라인")
         self.assertEqual(payload.items[0].body_ko, "그록 요약 본문")
 
@@ -391,7 +391,7 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model")
+        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY)
         self.assertEqual(payload.items[0].headline_ko, "Pearce, 이적 관련 기자 신호")
         self.assertEqual(payload.items[0].body_ko, "James Pearce가 리버풀 이적 관련 흐름을 전했습니다.")
 
@@ -511,6 +511,7 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertIn("--notify-discord", completed.stdout)
         self.assertIn("--until", completed.stdout)
         self.assertIn("--now", completed.stdout)
+        self.assertIn("--groq-requests-per-minute", completed.stdout)
 
     def test_resolve_since_text_uses_latest_supabase_briefing_when_saving(self):
         class FakeClient:
