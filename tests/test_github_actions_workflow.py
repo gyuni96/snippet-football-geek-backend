@@ -29,6 +29,10 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertIn("X_COOKIES_FILE: ${{ secrets.X_COOKIES_FILE }}", content)
         self.assertIn("DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}", content)
         self.assertIn("python3 -m pip install \".[x-twikit]\"", content)
+        self.assertLess(
+            content.index("python3 -m pip install \".[x-twikit]\""),
+            content.index("python3 -m unittest discover -s tests -v"),
+        )
         self.assertIn("default: all", content)
         self.assertIn("default: \"5\"", content)
         self.assertIn("--x-provider", content)

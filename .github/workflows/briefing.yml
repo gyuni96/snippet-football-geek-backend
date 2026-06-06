@@ -60,11 +60,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run tests
-        run: python3 -m unittest discover -s tests -v
-
       - name: Install X collector dependencies
         run: python3 -m pip install ".[x-twikit]"
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
 
       - name: Build briefing payload
         run: |
