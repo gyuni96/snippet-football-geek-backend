@@ -137,6 +137,15 @@ python3 -m app.jobs.run_briefing \
 python3 -m unittest discover -s tests -v
 ```
 
+## Supabase 데이터베이스
+
+생성 SQL과 테이블 설명은 `database/` 폴더에 있습니다.
+
+- `database/schema.sql`: Supabase SQL Editor에서 실행할 테이블/인덱스 생성 SQL
+- `database/README.md`: 테이블 구조와 주요 필드 설명
+
+MVP 저장 구조는 `briefings`와 `briefing_items` 두 테이블입니다. `briefing_items.item_type`으로 기사(`article`)와 X 게시물(`social_post`)을 구분하고, `category`로 이적/부상/경기 결과 같은 대표 카테고리를 구분합니다.
+
 ## GitHub Actions
 
 `.github/workflows/briefing.yml`은 현재 Supabase 저장 전 단계의 배치 실행 검증용 workflow입니다.
