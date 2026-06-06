@@ -14,18 +14,22 @@ class SourcesTest(unittest.TestCase):
     def test_liverpool_sources_include_configured_sources(self):
         self.assertEqual(
             sorted(LIVERPOOL_SOURCES.keys()),
-            ["liverpool_echo", "official_website"],
+            ["liverpool_echo", "official_website", "this_is_anfield"],
         )
         self.assertEqual(
             get_source("liverpool_echo").rss_url,
             "https://www.liverpoolecho.co.uk/all-about/liverpool%20fc?service=rss",
+        )
+        self.assertEqual(
+            get_source("this_is_anfield").rss_url,
+            "https://www.thisisanfield.com/feed/",
         )
         self.assertIsNone(get_source("official_website").rss_url)
 
     def test_iter_collectable_sources_skips_sources_without_rss_url(self):
         collectable_keys = [source.key for source in iter_collectable_sources(["all"])]
 
-        self.assertEqual(collectable_keys, ["liverpool_echo"])
+        self.assertEqual(collectable_keys, ["liverpool_echo", "this_is_anfield"])
 
     def test_liverpool_x_profiles_include_reporter_sources(self):
         self.assertIn("paul_joyce", LIVERPOOL_X_PROFILES)

@@ -41,6 +41,13 @@ LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
         rss_url="https://www.liverpoolecho.co.uk/all-about/liverpool%20fc?service=rss",
         description="리버풀 지역 유력지로, 팀의 공신력 높은 소식과 이적 시장 뉴스를 다룹니다.",
     ),
+    "this_is_anfield": SourceConfig(
+        key="this_is_anfield",
+        name="This Is Anfield",
+        website_url="https://www.thisisanfield.com/",
+        rss_url="https://www.thisisanfield.com/feed/",
+        description="리버풀 전문 독립 매체로, 주요 기자들의 소식과 팀 뉴스를 팬 친화적으로 정리해 제공합니다.",
+    ),
 }
 
 
@@ -73,12 +80,33 @@ LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
         profile_url="https://x.com/FabrizioRomano",
         description="이적 시장 전문가로, 리버풀과 관련된 이적 뉴스와 루머를 신속하게 보도합니다.",
     ),
+    "gregg_Evans": XProfileConfig(
+        key="gregg_Evans",
+        name="Gregg Evans",
+        handle="gregg_evans",
+        profile_url="https://x.com/greggevans40",
+        description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
+    ),
+    "i_an_doyle": XProfileConfig(
+        key="i_an_doyle",
+        name="Ian Doyle",
+        handle="i_an_doyle",
+        profile_url="https://x.com/IanDoyleSport",
+        description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
+    ),
     "lfc_transfer_room": XProfileConfig(
         key="lfc_transfer_room",
         name="LFCTransferRoom",
         handle="LFCTransferRoom",
         profile_url="https://x.com/LFCTransferRoom",
         description="리버풀 이적 시장 소식을 전문적으로 다루는 계정으로, 루머와 확인된 이적 뉴스를 제공합니다.",
+    ),
+    "anfield_sector": XProfileConfig(
+        key="anfield_sector",
+        name="Anfield Sector",
+        handle="AnfieldSector",
+        profile_url="https://x.com/AnfieldSector",
+        description="리버풀 팬 계정으로, 팀 소식과 팬 관점의 뉴스를 제공합니다.",
     ),
 }
 
