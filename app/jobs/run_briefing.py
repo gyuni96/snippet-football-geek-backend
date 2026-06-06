@@ -14,6 +14,7 @@ from typing import Callable, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
+from app.collectors.x_profiles import collect_x_profile_items
 from app.dedupe import dedupe_articles, dedupe_social_posts
 from app.env import load_env_file
 from app.freshness import filter_fresh_items, parse_iso_datetime
@@ -21,7 +22,7 @@ from app.groq import DEFAULT_GROQ_MODEL, GroqClient, summarize_article_with_groq
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
-from app.sources import iter_collectable_sources
+from app.sources import iter_collectable_sources, iter_collectable_x_profiles
 from app.state import load_last_success_at, save_last_success_at
 from app.supabase import SupabaseClient, fetch_latest_briefing_published_at, save_briefing_payload
 
@@ -178,6 +179,13 @@ def collect_raw_items(
                     feed_url=source.rss_url or "",
                     team_slug=team_slug,
                     source_name=source.name,
+                )
+            )
+        for profile in iter_collectable_x_profiles(source_keys):
+            raw_items.extend(
+                collect_x_profile_items(
+                    profile=profile,
+                    team_slug=team_slug,
                 )
             )
         return raw_items

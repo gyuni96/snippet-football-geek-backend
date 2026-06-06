@@ -84,6 +84,30 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
 
+    def test_run_pipeline_collects_x_profile_sources_as_social_posts(self):
+        x_item = _sample_raw_item(
+            external_id="post-1",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at="2026-06-06T09:00:00Z",
+            source_type="x_profile",
+            source_name="James Pearce",
+            author="JamesPearceLFC",
+        )
+
+        with patch("app.jobs.run_briefing.collect_x_profile_items", return_value=[x_item]) as collector:
+            payload = run_pipeline(
+                team_slug="liverpool",
+                briefing_type="morning",
+                source_keys=["x_reporters"],
+                retention_days=7,
+                now_text="2026-06-06T12:00:00Z",
+            )
+
+        collector.assert_called_once()
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_type, "social_post")
+        self.assertEqual(payload.items[0].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
+
     def test_run_pipeline_uses_state_file_since_and_updates_state(self):
         fresh_item = _sample_raw_item(
             external_id="fresh",
@@ -264,6 +288,9 @@ def _sample_raw_item(
     external_id="rss-1",
     url="https://example.com/liverpool-story",
     published_at="2026-06-06T08:00:00Z",
+    source_type="rss",
+    source_name="Example RSS",
+    author=None,
 ):
     from datetime import datetime, timezone
 
@@ -273,13 +300,14 @@ def _sample_raw_item(
 
     return RawItem(
         team_slug="liverpool",
-        source_type="rss",
-        source_name="Example RSS",
+        source_type=source_type,
+        source_name=source_name,
         external_id=external_id,
         url=url,
         title="Liverpool transfer update",
         text="Liverpool are monitoring a transfer target.",
         published_at=parsed,
+        author=author,
     )
 
 

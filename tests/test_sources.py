@@ -1,6 +1,13 @@
 import unittest
 
-from app.sources import LIVERPOOL_SOURCES, get_source, iter_collectable_sources
+from app.sources import (
+    LIVERPOOL_SOURCES,
+    LIVERPOOL_X_PROFILES,
+    get_source,
+    get_x_profile,
+    iter_collectable_sources,
+    iter_collectable_x_profiles,
+)
 
 
 class SourcesTest(unittest.TestCase):
@@ -19,6 +26,15 @@ class SourcesTest(unittest.TestCase):
         collectable_keys = [source.key for source in iter_collectable_sources(["all"])]
 
         self.assertEqual(collectable_keys, ["liverpool_echo", "bbc_sport"])
+
+    def test_liverpool_x_profiles_include_reporter_sources(self):
+        self.assertIn("james_pearce", LIVERPOOL_X_PROFILES)
+        self.assertEqual(get_x_profile("james_pearce").handle, "JamesPearceLFC")
+
+    def test_iter_collectable_x_profiles_supports_group_key(self):
+        profile_keys = [profile.key for profile in iter_collectable_x_profiles(["x_reporters"])]
+
+        self.assertIn("james_pearce", profile_keys)
 
 
 if __name__ == "__main__":

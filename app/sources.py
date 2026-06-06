@@ -1,8 +1,7 @@
 """임시 리버풀 수집 소스 설정입니다.
 
-CLI가 `liverpool_echo`처럼 설정된 key로 피드를 수집할 수 있게 해줍니다.
-RSS URL이 없는 소스도 이곳에 문서화해두고, 현재 RSS 전용 수집기에서는
-자동으로 건너뜁니다.
+CLI가 `liverpool_echo`, `x_reporters`처럼 설정된 key로 소스를 수집할 수
+있게 해줍니다. RSS와 X 프로필 소스는 서로 다른 어댑터에서 처리합니다.
 """
 
 from dataclasses import dataclass
@@ -15,6 +14,15 @@ class SourceConfig:
     name: str
     website_url: str
     rss_url: Optional[str]
+    description: str
+
+
+@dataclass(frozen=True)
+class XProfileConfig:
+    key: str
+    name: str
+    handle: str
+    profile_url: str
     description: str
 
 
@@ -46,11 +54,33 @@ LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
 }
 
 
+LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
+    "james_pearce": XProfileConfig(
+        key="james_pearce",
+        name="James Pearce",
+        handle="JamesPearceLFC",
+        profile_url="https://x.com/JamesPearceLFC",
+        description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
+    ),
+}
+
+
 def get_source(key: str) -> SourceConfig:
     return LIVERPOOL_SOURCES[key]
 
 
+def get_x_profile(key: str) -> XProfileConfig:
+    return LIVERPOOL_X_PROFILES[key]
+
+
 def iter_collectable_sources(source_keys: Iterable[str]) -> List[SourceConfig]:
     keys = list(source_keys)
-    selected = LIVERPOOL_SOURCES.values() if "all" in keys else [get_source(key) for key in keys]
+    selected = LIVERPOOL_SOURCES.values() if "all" in keys else [get_source(key) for key in keys if key in LIVERPOOL_SOURCES]
     return [source for source in selected if source.rss_url]
+
+
+def iter_collectable_x_profiles(source_keys: Iterable[str]) -> List[XProfileConfig]:
+    keys = list(source_keys)
+    if "all" in keys or "x_reporters" in keys:
+        return list(LIVERPOOL_X_PROFILES.values())
+    return [get_x_profile(key) for key in keys if key in LIVERPOOL_X_PROFILES]
