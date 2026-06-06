@@ -106,7 +106,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
         or _is_mostly_untranslated_english(result["headline_ko"])
         or _is_mostly_untranslated_english(result["body_ko"])
     ):
-        return _fallback_article_summary(article, result)
+        raise GroqAPIError("Groq article summary failed quality checks.")
     return result
 
 
@@ -147,9 +147,9 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
     }
     result = _restore_known_proper_names(result)
     if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
-        return _fallback_social_post_summary(post, result)
+        raise GroqAPIError("Groq social post summary failed quality checks.")
     if _has_generic_social_headline(result["headline_ko"]) or _has_generic_social_body(result["body_ko"]):
-        return _fallback_social_post_summary(post, result)
+        raise GroqAPIError("Groq social post summary failed quality checks.")
     return result
 
 
@@ -243,10 +243,9 @@ def _is_mostly_untranslated_english(value: str) -> bool:
 def _fallback_article_summary(article: Article, summary: Dict[str, str]) -> Dict[str, str]:
     subject = _article_fallback_subject(article)
     return {
-        "headline_ko": f"{subject} 관련 {article.source_name} 보도",
+        "headline_ko": f"{subject} 관련 리버풀 소식",
         "body_ko": (
-            f"{article.source_name}의 영문 원문을 바탕으로 추가 확인이 필요합니다. "
-            "원문 확인이 필요한 리버풀 관련 보도입니다."
+            f"{article.source_name}가 '{_trim_text(article.title, 80)}' 내용을 전했습니다."
         ),
         "confidence_label": summary["confidence_label"],
         "category": summary["category"],
@@ -275,11 +274,11 @@ def _fallback_social_post_summary(post: SocialPost, summary: Dict[str, str]) -> 
     clean_text = _clean_social_text(post.text)
     subject = _social_fallback_subject(post, clean_text)
     if _is_weak_social_signal(clean_text):
-        headline = f"{post.source_name}의 약한 X 반응"
+        headline = f"{post.source_name}의 X 반응"
         body = f"{post.source_name}가 구체적인 새 정보 없이 짧은 반응을 남겼습니다."
     else:
-        headline = f"{subject} 관련 X 보도"
-        body = f"{post.source_name}가 X에서 {subject} 관련 흐름을 전했습니다."
+        headline = f"{subject} 관련 X 업데이트"
+        body = f"{post.source_name}가 X에서 {subject} 관련 내용을 전했습니다."
     return {
         "headline_ko": headline,
         "body_ko": body,
@@ -314,6 +313,13 @@ def _clean_social_text(value: str) -> str:
     text = value.replace("\n", " ")
     text = " ".join(part for part in text.split() if not part.startswith("http"))
     return " ".join(text.split()).strip()
+
+
+def _trim_text(value: str, max_length: int) -> str:
+    compact = " ".join(value.split())
+    if len(compact) <= max_length:
+        return compact
+    return compact[: max_length - 1].rstrip() + "…"
 
 
 def _is_weak_social_signal(value: str) -> bool:

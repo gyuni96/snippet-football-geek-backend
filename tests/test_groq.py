@@ -69,7 +69,7 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(summary["confidence_label"], "reported")
         self.assertEqual(summary["category"], "etc")
 
-    def test_summarize_article_with_groq_falls_back_when_foreign_script_leaks(self):
+    def test_summarize_article_with_groq_rejects_foreign_script_leaks(self):
         article = Article(
             team_slug="liverpool",
             source_name="Liverpool Echo",
@@ -88,15 +88,11 @@ class GroqTest(unittest.TestCase):
             }
         )
 
-        summary = summarize_article_with_groq(article, client)
-
-        self.assertEqual(summary["headline_ko"], "Jurgen Klopp 관련 Liverpool Echo 보도")
-        self.assertIn("원문 확인이 필요한 리버풀 관련 보도입니다", summary["body_ko"])
-        self.assertEqual(summary["confidence_label"], "reported")
-        self.assertEqual(summary["category"], "rumor")
+        with self.assertRaises(GroqAPIError):
+            summarize_article_with_groq(article, client)
         self.assertIn("Thai", client.messages[0]["content"])
 
-    def test_summarize_article_with_groq_falls_back_when_summary_is_mostly_english(self):
+    def test_summarize_article_with_groq_rejects_mostly_english_summary(self):
         article = Article(
             team_slug="liverpool",
             source_name="Liverpool Echo",
@@ -115,10 +111,8 @@ class GroqTest(unittest.TestCase):
             }
         )
 
-        summary = summarize_article_with_groq(article, client)
-
-        self.assertEqual(summary["headline_ko"], "Jurgen Klopp 관련 Liverpool Echo 보도")
-        self.assertIn("영문 원문을 바탕으로 추가 확인이 필요합니다", summary["body_ko"])
+        with self.assertRaises(GroqAPIError):
+            summarize_article_with_groq(article, client)
 
     def test_summarize_social_post_with_groq_uses_editorial_prompt(self):
         post = SocialPost(
@@ -186,7 +180,7 @@ class GroqTest(unittest.TestCase):
         self.assertIn("Crystal Palace", summary["body_ko"])
         self.assertIn("Leverkusen", summary["body_ko"])
 
-    def test_summarize_social_post_with_groq_falls_back_from_generic_summary(self):
+    def test_summarize_social_post_with_groq_rejects_generic_summary(self):
         post = SocialPost(
             team_slug="liverpool",
             platform="x",
@@ -206,11 +200,8 @@ class GroqTest(unittest.TestCase):
             }
         )
 
-        summary = summarize_social_post_with_groq(post, client)
-
-        self.assertEqual(summary["headline_ko"], "Federico Chiesa 관련 X 보도")
-        self.assertEqual(summary["body_ko"], "LFCTransferRoom가 X에서 Federico Chiesa 관련 흐름을 전했습니다.")
-        self.assertEqual(summary["category"], "transfer")
+        with self.assertRaises(GroqAPIError):
+            summarize_social_post_with_groq(post, client)
 
     def test_summarize_social_post_with_groq_marks_emoji_only_post_as_weak_signal(self):
         post = SocialPost(
@@ -232,11 +223,8 @@ class GroqTest(unittest.TestCase):
             }
         )
 
-        summary = summarize_social_post_with_groq(post, client)
-
-        self.assertEqual(summary["headline_ko"], "LFCTransferRoom의 약한 X 반응")
-        self.assertEqual(summary["body_ko"], "LFCTransferRoom가 구체적인 새 정보 없이 짧은 반응을 남겼습니다.")
-        self.assertEqual(summary["category"], "etc")
+        with self.assertRaises(GroqAPIError):
+            summarize_social_post_with_groq(post, client)
 
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}

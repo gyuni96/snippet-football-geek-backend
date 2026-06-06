@@ -7,6 +7,7 @@
 
 from datetime import datetime
 from typing import Callable, Dict, Iterable, List, Optional
+import re
 
 from app.categories import category_label_ko, classify_article, classify_social_post, normalize_category
 from app.models import Article, BriefingItem, BriefingPayload, SocialPost
@@ -34,6 +35,8 @@ def build_briefing_payload(
 
     for article in articles:
         article_summary = _summarize_article(article, article_summarizer)
+        if article_summary is None:
+            continue
         category = normalize_category(article_summary["category"])
         items.append(
             BriefingItem(
@@ -51,7 +54,11 @@ def build_briefing_payload(
         )
 
     for post in social_posts:
+        if _is_low_signal_social_post(post):
+            continue
         social_summary = _summarize_social_post(post, social_post_summarizer)
+        if social_summary is None:
+            continue
         category = normalize_category(social_summary["category"])
         items.append(
             BriefingItem(
@@ -99,7 +106,7 @@ def _article_source_names(article: Article) -> List[str]:
 def _summarize_article(
     article: Article,
     article_summarizer: Optional[Callable[[Article], Dict[str, str]]],
-) -> Dict[str, str]:
+) -> Optional[Dict[str, str]]:
     if article_summarizer is None:
         return {
             "headline_ko": _article_headline(article),
@@ -111,12 +118,7 @@ def _summarize_article(
     try:
         summary = article_summarizer(article)
     except RuntimeError:
-        return {
-            "headline_ko": _article_headline(article),
-            "body_ko": _article_body(article),
-            "confidence_label": "reported",
-            "category": classify_article(article),
-        }
+        return _safe_article_fallback(article)
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
@@ -128,7 +130,7 @@ def _summarize_article(
 def _summarize_social_post(
     post: SocialPost,
     social_post_summarizer: Optional[Callable[[SocialPost], Dict[str, str]]],
-) -> Dict[str, str]:
+) -> Optional[Dict[str, str]]:
     if social_post_summarizer is None:
         category = classify_social_post(post)
         return {
@@ -141,16 +143,85 @@ def _summarize_social_post(
     try:
         summary = social_post_summarizer(post)
     except RuntimeError:
-        category = classify_social_post(post)
-        return {
-            "headline_ko": f"{post.source_name} 기자 신호",
-            "body_ko": f"{post.source_name}는 X에서 '{post.text}'라고 전했습니다.",
-            "confidence_label": "reporter_claim",
-            "category": category,
-        }
+        return _safe_social_post_fallback(post)
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
         "confidence_label": summary.get("confidence_label", "reporter_claim"),
         "category": normalize_category(summary.get("category", classify_social_post(post))),
     }
+
+
+def _is_low_signal_social_post(post: SocialPost) -> bool:
+    clean_text = _clean_social_text(post.text)
+    if not clean_text:
+        return True
+    lowered = clean_text.lower().strip(" .")
+    if lowered in {"right", "via"}:
+        return True
+    if lowered.startswith("via:"):
+        return True
+    meaningful = [character for character in clean_text if character.isalnum()]
+    return len(meaningful) < 8
+
+
+def _safe_article_fallback(article: Article) -> Dict[str, str]:
+    category = classify_article(article)
+    subject = _subject_from_text(f"{article.title} {article.body}") or "리버풀"
+    return {
+        "headline_ko": f"{subject} 관련 {_fallback_category_phrase(category)}",
+        "body_ko": f"{article.source_name}가 {subject} 관련 리버풀 소식을 전했습니다.",
+        "confidence_label": "reported",
+        "category": category,
+    }
+
+
+def _safe_social_post_fallback(post: SocialPost) -> Optional[Dict[str, str]]:
+    category = classify_social_post(post)
+    clean_text = _clean_social_text(post.text)
+    subject = _subject_from_text(clean_text)
+    if subject is None:
+        return None
+    return {
+        "headline_ko": f"{subject} 관련 X 소식",
+        "body_ko": f"{post.source_name}가 X에서 {subject} 관련 리버풀 소식을 전했습니다.",
+        "confidence_label": "reporter_claim",
+        "category": category,
+    }
+
+
+def _clean_social_text(value: str) -> str:
+    text = value.replace("\n", " ")
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"\bRT\s+@", "@", text)
+    return " ".join(text.split()).strip()
+
+
+def _fallback_category_phrase(category: str) -> str:
+    label = category_label_ko(category)
+    if label.endswith("소식"):
+        return label
+    return f"{label} 소식"
+
+
+def _subject_from_text(value: str) -> Optional[str]:
+    known_subjects = [
+        "Rio Ngumoha",
+        "Curtis Jones",
+        "Federico Chiesa",
+        "Cody Gakpo",
+        "Jurgen Klopp",
+        "Real Madrid",
+        "Andoni Iraola",
+        "Arne Slot",
+        "Bradley Barcola",
+        "Mohamed Salah",
+        "Virgil van Dijk",
+        "Hugo Ekitike",
+        "Liverpool",
+    ]
+    haystack = value.lower()
+    for subject in known_subjects:
+        if subject.lower() in haystack:
+            return subject
+    return None
