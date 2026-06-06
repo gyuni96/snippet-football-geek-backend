@@ -14,6 +14,7 @@ on:
         type: choice
         options:
           - morning
+          - afternoon
           - evening
           - transfer_extra
           - matchday
@@ -31,10 +32,12 @@ on:
         default: true
         type: boolean
   schedule:
-    # 07:30 KST morning briefing
-    - cron: "30 22 * * *"
-    # 18:30 KST evening briefing
-    - cron: "30 9 * * *"
+    # 05:00 KST early briefing
+    - cron: "0 20 * * *"
+    # 16:00 KST afternoon briefing
+    - cron: "0 7 * * *"
+    # 22:00 KST night briefing
+    - cron: "0 13 * * *"
 
 jobs:
   run-briefing:
@@ -57,10 +60,27 @@ jobs:
       - name: Build briefing payload
         run: |
           TEAM="${{ github.event.inputs.team || 'liverpool' }}"
-          BRIEFING_TYPE="${{ github.event.inputs.briefing_type || 'morning' }}"
+          BRIEFING_TYPE="${{ github.event.inputs.briefing_type }}"
           SOURCE="${{ github.event.inputs.source || 'liverpool_echo' }}"
           LIMIT="${{ github.event.inputs.limit || '3' }}"
           USE_GROQ="${{ github.event.inputs.use_groq || 'true' }}"
+
+          if [ -z "$BRIEFING_TYPE" ]; then
+            case "$(date -u +%H)" in
+              20)
+                BRIEFING_TYPE="morning"
+                ;;
+              07)
+                BRIEFING_TYPE="afternoon"
+                ;;
+              13)
+                BRIEFING_TYPE="evening"
+                ;;
+              *)
+                BRIEFING_TYPE="morning"
+                ;;
+            esac
+          fi
 
           CMD=(
             python3 -m app.jobs.run_briefing

@@ -69,6 +69,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
                 "Always keep proper names in original Latin spelling exactly as they appear in the source text. "
                 "Keep names like Federico Chiesa, Andoni Iraola, Arne Slot, Liverpool, Bournemouth, and Liverpool Echo in English. "
                 "Never output broken mixed-script names or Chinese/Japanese characters for European football names. "
+                "Do not use Hanja, Kanji, Hanzi, Kana, or any Chinese/Japanese characters in headline_ko or body_ko. "
                 "Use a fan-friendly but careful tone. Do not present rumors as confirmed. "
                 "Only use facts present in the provided title and body. Ignore clues from URLs. "
                 "Do not add clubs, players, fees, injuries, quotes, or transfer status that are not in the title or body. "

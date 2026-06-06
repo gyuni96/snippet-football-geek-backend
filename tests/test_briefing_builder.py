@@ -80,6 +80,19 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].headline_ko, "리버풀, 중원 후보 주시")
         self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
 
+    def test_builds_afternoon_briefing_title(self):
+        published_at = datetime(2026, 6, 6, 16, 0, tzinfo=timezone.utc)
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="afternoon",
+            articles=[],
+            social_posts=[],
+            published_at=published_at,
+        )
+
+        self.assertEqual(payload.title, "리버풀 오후 브리핑")
+
 
 if __name__ == "__main__":
     unittest.main()

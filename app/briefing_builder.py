@@ -13,6 +13,7 @@ from app.models import Article, BriefingItem, BriefingPayload, SocialPost
 
 BRIEFING_TITLES = {
     "morning": "리버풀 아침 브리핑",
+    "afternoon": "리버풀 오후 브리핑",
     "evening": "리버풀 저녁 브리핑",
     "transfer_extra": "리버풀 이적시장 브리핑",
     "matchday": "리버풀 매치데이 브리핑",

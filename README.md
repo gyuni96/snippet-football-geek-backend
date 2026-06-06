@@ -128,9 +128,10 @@ python3 -m unittest discover -s tests -v
 
 `.github/workflows/briefing.yml`은 현재 Supabase 저장 전 단계의 배치 실행 검증용 workflow입니다.
 
-- 매일 2회 실행합니다.
-  - `22:30 UTC`: 한국 시간 07:30 아침 브리핑
-  - `09:30 UTC`: 한국 시간 18:30 저녁 브리핑
+- 매일 3회 실행합니다.
+  - `20:00 UTC`: 한국 시간 05:00 새벽/아침 브리핑
+  - `07:00 UTC`: 한국 시간 16:00 오후 브리핑
+  - `13:00 UTC`: 한국 시간 22:00 밤 브리핑
 - `workflow_dispatch`로 수동 실행할 수 있습니다.
 - 기본 실행은 `liverpool_echo` 소스에서 `3건`만 처리합니다.
 - `GROQ_API_KEY`는 GitHub Repository secrets에 등록해야 합니다.
@@ -139,7 +140,7 @@ python3 -m unittest discover -s tests -v
 수동 실행 입력값:
 
 - `team`: 기본 `liverpool`
-- `briefing_type`: `morning`, `evening`, `transfer_extra`, `matchday`
+- `briefing_type`: `morning`, `afternoon`, `evening`, `transfer_extra`, `matchday`
 - `source`: 기본 `liverpool_echo`
 - `limit`: 기본 `3`
 - `use_groq`: 기본 `true`

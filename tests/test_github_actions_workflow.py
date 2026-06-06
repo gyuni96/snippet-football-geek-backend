@@ -11,8 +11,11 @@ class GithubActionsWorkflowTest(unittest.TestCase):
 
         self.assertIn("workflow_dispatch:", content)
         self.assertIn("schedule:", content)
-        self.assertIn("30 22 * * *", content)
-        self.assertIn("30 9 * * *", content)
+        self.assertIn("0 20 * * *", content)
+        self.assertIn("0 7 * * *", content)
+        self.assertIn("0 13 * * *", content)
+        self.assertIn("BRIEFING_TYPE=\"afternoon\"", content)
+        self.assertIn("BRIEFING_TYPE=\"evening\"", content)
         self.assertIn("python3 -m app.jobs.run_briefing", content)
         self.assertIn("--source", content)
         self.assertIn("--limit", content)
