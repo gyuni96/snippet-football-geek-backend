@@ -27,13 +27,6 @@ class XProfileConfig:
 
 
 LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
-    "liverpool_echo": SourceConfig(
-        key="liverpool_echo",
-        name="Liverpool Echo - Liverpool FC",
-        website_url="https://www.liverpoolecho.co.uk/all-about/liverpool-fc",
-        rss_url="https://www.liverpoolecho.co.uk/all-about/liverpool%20fc?service=rss",
-        description="리버풀 지역 유력지로, 팀의 공신력 높은 소식과 이적 시장 뉴스를 다룹니다.",
-    ),
     "official_website": SourceConfig(
         key="official_website",
         name="Liverpool FC Official Website",
@@ -41,10 +34,31 @@ LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
         rss_url=None,
         description="리버풀 FC의 공식 홈페이지로 공식 성명, 매치 리포트 및 오피셜 소식을 제공합니다.",
     ),
+    "liverpool_echo": SourceConfig(
+        key="liverpool_echo",
+        name="Liverpool Echo - Liverpool FC",
+        website_url="https://www.liverpoolecho.co.uk/all-about/liverpool-fc",
+        rss_url="https://www.liverpoolecho.co.uk/all-about/liverpool%20fc?service=rss",
+        description="리버풀 지역 유력지로, 팀의 공신력 높은 소식과 이적 시장 뉴스를 다룹니다.",
+    ),
 }
 
 
 LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
+    "paul_joyce": XProfileConfig(
+        key="paul_joyce",
+        name="Paul Joyce",
+        handle="_pauljoyce",
+        profile_url="https://x.com/_pauljoyce",
+        description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
+    ),
+    "david_ornstein": XProfileConfig(
+        key="david_ornstein",
+        name="David Ornstein",
+        handle="David_Ornstein",
+        profile_url="https://x.com/David_Ornstein",
+        description="축구 이적 시장의 권위자로, 리버풀과 관련된 이적 뉴스와 루머를 신속하게 보도합니다.",
+    ),
     "james_pearce": XProfileConfig(
         key="james_pearce",
         name="James Pearce",

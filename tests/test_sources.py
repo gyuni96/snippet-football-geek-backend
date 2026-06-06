@@ -28,9 +28,13 @@ class SourcesTest(unittest.TestCase):
         self.assertEqual(collectable_keys, ["liverpool_echo"])
 
     def test_liverpool_x_profiles_include_reporter_sources(self):
+        self.assertIn("paul_joyce", LIVERPOOL_X_PROFILES)
+        self.assertIn("david_ornstein", LIVERPOOL_X_PROFILES)
         self.assertIn("james_pearce", LIVERPOOL_X_PROFILES)
         self.assertIn("fabrizio_romano", LIVERPOOL_X_PROFILES)
         self.assertIn("lfc_transfer_room", LIVERPOOL_X_PROFILES)
+        self.assertEqual(get_x_profile("paul_joyce").handle, "_pauljoyce")
+        self.assertEqual(get_x_profile("david_ornstein").handle, "David_Ornstein")
         self.assertEqual(get_x_profile("james_pearce").handle, "JamesPearceLFC")
         self.assertEqual(get_x_profile("fabrizio_romano").handle, "FabrizioRomano")
         self.assertEqual(get_x_profile("lfc_transfer_room").handle, "LFCTransferRoom")
@@ -38,6 +42,8 @@ class SourcesTest(unittest.TestCase):
     def test_iter_collectable_x_profiles_supports_group_key(self):
         profile_keys = [profile.key for profile in iter_collectable_x_profiles(["x_reporters"])]
 
+        self.assertIn("paul_joyce", profile_keys)
+        self.assertIn("david_ornstein", profile_keys)
         self.assertIn("james_pearce", profile_keys)
         self.assertIn("fabrizio_romano", profile_keys)
         self.assertIn("lfc_transfer_room", profile_keys)

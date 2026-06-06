@@ -11,6 +11,7 @@ from unittest.mock import patch
 from app.collectors.x_profiles import XProfileCollectionError
 from app.jobs.run_briefing import resolve_since_text, run_pipeline, should_save_payload_to_supabase
 from app.models import BriefingPayload
+from app.sources import LIVERPOOL_X_PROFILES
 
 
 class RunBriefingCliTest(unittest.TestCase):
@@ -106,7 +107,7 @@ class RunBriefingCliTest(unittest.TestCase):
                 now_text="2026-06-06T12:00:00Z",
             )
 
-        self.assertEqual(collector.call_count, 3)
+        self.assertEqual(collector.call_count, len(LIVERPOOL_X_PROFILES))
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_type, "social_post")
         self.assertEqual(payload.items[0].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
@@ -148,15 +149,16 @@ class RunBriefingCliTest(unittest.TestCase):
             SimpleNamespace(key="broken_rss", rss_url="https://example.com/broken/rss", name="Broken RSS"),
         ]
         with patch("app.jobs.run_briefing.iter_collectable_sources", return_value=sources):
-            with patch("app.jobs.run_briefing.collect_rss_items", side_effect=fake_collect_rss_items):
-                with patch("sys.stderr", stderr):
-                    payload = run_pipeline(
-                        team_slug="liverpool",
-                        briefing_type="morning",
-                        source_keys=["all"],
-                        retention_days=7,
-                        now_text="2026-06-06T12:00:00Z",
-                    )
+            with patch("app.jobs.run_briefing.iter_collectable_x_profiles", return_value=[]):
+                with patch("app.jobs.run_briefing.collect_rss_items", side_effect=fake_collect_rss_items):
+                    with patch("sys.stderr", stderr):
+                        payload = run_pipeline(
+                            team_slug="liverpool",
+                            briefing_type="morning",
+                            source_keys=["all"],
+                            retention_days=7,
+                            now_text="2026-06-06T12:00:00Z",
+                        )
 
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_urls, ["https://example.com/liverpool-story"])
