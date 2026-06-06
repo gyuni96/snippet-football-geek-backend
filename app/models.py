@@ -57,6 +57,8 @@ class BriefingItem:
     source_count: int
     confidence_label: str
     source_urls: List[str]
+    source_names: List[str]
+    source_type: str
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -66,6 +68,8 @@ class BriefingItem:
             "source_count": self.source_count,
             "confidence_label": self.confidence_label,
             "source_urls": self.source_urls,
+            "source_names": self.source_names,
+            "source_type": self.source_type,
         }
 
 

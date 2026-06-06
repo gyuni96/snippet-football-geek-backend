@@ -36,6 +36,10 @@ class GroqTest(unittest.TestCase):
         )
         self.assertEqual(summary["confidence_label"], "reported")
         self.assertIn("Liverpool monitor midfield target", client.messages[1]["content"])
+        self.assertIn("Do not translate proper names", client.messages[0]["content"])
+        self.assertIn("Always keep proper names in original Latin spelling", client.messages[0]["content"])
+        self.assertIn("Do not invent transfer fees", client.messages[0]["content"])
+        self.assertIn("Only use facts present in the provided title and body", client.messages[0]["content"])
 
     def test_summarize_article_with_groq_normalizes_unknown_confidence_label(self):
         article = Article(

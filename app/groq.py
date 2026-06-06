@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 from app.models import Article
 
 
-DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
@@ -64,8 +64,16 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
             "content": (
                 "You are a Korean football editor writing for Liverpool fans. "
                 "Return only JSON with keys headline_ko, body_ko, confidence_label. "
-                "Use natural Korean with no awkward English verbs. Keep player, club, and journalist names as proper nouns. "
+                "Use natural Korean with no awkward English verbs. "
+                "Do not translate proper names for players, clubs, managers, journalists, stadiums, or publications. "
+                "Always keep proper names in original Latin spelling exactly as they appear in the source text. "
+                "Keep names like Federico Chiesa, Andoni Iraola, Arne Slot, Liverpool, Bournemouth, and Liverpool Echo in English. "
+                "Never output broken mixed-script names or Chinese/Japanese characters for European football names. "
                 "Use a fan-friendly but careful tone. Do not present rumors as confirmed. "
+                "Only use facts present in the provided title and body. Ignore clues from URLs. "
+                "Do not add clubs, players, fees, injuries, quotes, or transfer status that are not in the title or body. "
+                "Do not invent transfer fees, dates, injuries, quotes, or negotiation status that are not in the source text. "
+                "If the article is only a report, write it as a report. "
                 "confidence_label must be one of: official, reported, rumor, unconfirmed."
             ),
         },

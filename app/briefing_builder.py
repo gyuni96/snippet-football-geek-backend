@@ -39,6 +39,8 @@ def build_briefing_payload(
                 source_count=1,
                 confidence_label=article_summary["confidence_label"],
                 source_urls=[article.canonical_url],
+                source_names=[article.source_name],
+                source_type="article",
             )
         )
 
@@ -51,6 +53,8 @@ def build_briefing_payload(
                 source_count=1,
                 confidence_label="reporter_claim",
                 source_urls=[post.url],
+                source_names=[post.source_name],
+                source_type="social_post",
             )
         )
 

@@ -44,8 +44,12 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(len(payload.items), 2)
         self.assertEqual(payload.items[0].section, "top_stories")
         self.assertEqual(payload.items[0].confidence_label, "reported")
+        self.assertEqual(payload.items[0].source_names, ["Liverpool Echo"])
+        self.assertEqual(payload.items[0].source_type, "article")
         self.assertEqual(payload.items[1].section, "reporter_signals")
         self.assertEqual(payload.items[1].confidence_label, "reporter_claim")
+        self.assertEqual(payload.items[1].source_names, ["James Pearce"])
+        self.assertEqual(payload.items[1].source_type, "social_post")
 
     def test_builds_article_item_with_groq_summarizer_when_provided(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)

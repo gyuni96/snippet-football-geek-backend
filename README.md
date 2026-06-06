@@ -85,6 +85,8 @@ python3 -m app.jobs.run_briefing \
 ```
 
 Groq API key가 `.env`에 있으면 `--use-groq`로 기사 요약/번역을 실제 한국어 브리핑 문장으로 생성할 수 있습니다.
+기본 모델은 한국어 기사 요약 품질을 우선해 `llama-3.3-70b-versatile`을 사용합니다.
+빠른 개발 테스트가 필요하면 `--groq-model llama-3.1-8b-instant`로 바꿀 수 있습니다.
 
 ```bash
 python3 -m app.jobs.run_briefing \
@@ -104,6 +106,17 @@ python3 -m app.jobs.run_briefing \
   --limit 3 \
   --use-groq
 ```
+
+현재 콘솔 payload는 Supabase 저장 전 검증용으로 아래 구조를 유지합니다.
+
+- `team_slug`, `briefing_type`, `title`, `summary_ko`, `published_at`
+- `items[].section`
+- `items[].headline_ko`
+- `items[].body_ko`
+- `items[].confidence_label`
+- `items[].source_urls`
+- `items[].source_names`
+- `items[].source_type`
 
 ## 테스트
 
