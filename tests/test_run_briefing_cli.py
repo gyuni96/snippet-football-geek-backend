@@ -326,6 +326,7 @@ class RunBriefingCliTest(unittest.TestCase):
         )
 
         self.assertIn("--save-supabase", completed.stdout)
+        self.assertIn("--save-monitoring", completed.stdout)
 
     def test_resolve_since_text_uses_latest_supabase_briefing_when_saving(self):
         class FakeClient:

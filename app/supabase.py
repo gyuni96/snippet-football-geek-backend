@@ -86,6 +86,35 @@ def save_briefing_payload(payload: BriefingPayload, client: SupabaseClient) -> s
     return str(briefing_id)
 
 
+def save_collector_run(
+    client: SupabaseClient,
+    team_slug: str,
+    briefing_type: str,
+    status: str,
+    source_keys: List[str],
+    item_count: int,
+    article_count: int,
+    social_post_count: int,
+    briefing_id: Optional[str] = None,
+    error_message: Optional[str] = None,
+) -> str:
+    rows = client.post(
+        "collector_runs?select=id",
+        {
+            "team_slug": team_slug,
+            "briefing_type": briefing_type,
+            "status": status,
+            "source_keys": source_keys,
+            "item_count": item_count,
+            "article_count": article_count,
+            "social_post_count": social_post_count,
+            "briefing_id": briefing_id,
+            "error_message": error_message,
+        },
+    )
+    return str(rows[0]["id"])
+
+
 def fetch_latest_briefing_published_at(
     client: SupabaseClient,
     team_slug: str,

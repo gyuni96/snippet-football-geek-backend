@@ -233,8 +233,10 @@ MVP 저장 구조는 `briefings`와 `briefing_items` 두 테이블입니다. `br
   - `07:00 UTC`: 한국 시간 16:00 오후 브리핑
   - `13:00 UTC`: 한국 시간 22:00 밤 브리핑
 - `workflow_dispatch`로 수동 실행할 수 있습니다.
-- 기본 실행은 `liverpool_echo` 소스에서 `3건`만 처리합니다.
+- 기본 실행은 `all` 소스에서 `5건`을 처리하고, Twikit provider로 X 지정 계정 수집을 함께 시도합니다.
 - `GROQ_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Repository secrets에 등록해야 합니다.
+- X 수집을 GitHub Actions에서 사용하려면 `X_AUTH_TOKEN`, `X_CT0`, `X_COOKIES_FILE`도 Repository secrets에 직접 등록해야 합니다.
+- 실행 상태는 Supabase `collector_runs` 테이블에 저장합니다.
 - Actions 로그에는 콘솔 JSON도 함께 남습니다.
 
 수동 실행 입력값:

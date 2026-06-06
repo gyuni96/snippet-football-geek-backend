@@ -3,7 +3,12 @@ import json
 import unittest
 
 from app.models import BriefingItem, BriefingPayload
-from app.supabase import SupabaseClient, fetch_latest_briefing_published_at, save_briefing_payload
+from app.supabase import (
+    SupabaseClient,
+    fetch_latest_briefing_published_at,
+    save_briefing_payload,
+    save_collector_run,
+)
 
 
 class SupabaseClientTest(unittest.TestCase):
@@ -89,6 +94,49 @@ class SupabaseClientTest(unittest.TestCase):
         self.assertIn("team_slug=eq.liverpool", requests[0]["url"])
         self.assertNotIn("briefing_type=eq.", requests[0]["url"])
         self.assertIn("order=published_at.desc", requests[0]["url"])
+
+    def test_save_collector_run_inserts_monitoring_row(self):
+        requests = []
+
+        def fake_http_request(url, method, headers, body):
+            requests.append(
+                {
+                    "url": url,
+                    "method": method,
+                    "body": json.loads(body.decode("utf-8")) if body else None,
+                }
+            )
+            return [{"id": "run-id-1"}]
+
+        client = SupabaseClient(
+            base_url="https://example.supabase.co",
+            service_role_key="service-key",
+            http_request=fake_http_request,
+        )
+
+        run_id = save_collector_run(
+            client,
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="success",
+            source_keys=["all"],
+            item_count=5,
+            article_count=4,
+            social_post_count=1,
+            briefing_id="briefing-id-1",
+            error_message=None,
+        )
+
+        self.assertEqual(run_id, "run-id-1")
+        self.assertEqual(requests[0]["method"], "POST")
+        self.assertIn("/rest/v1/collector_runs?select=id", requests[0]["url"])
+        self.assertEqual(requests[0]["body"]["team_slug"], "liverpool")
+        self.assertEqual(requests[0]["body"]["status"], "success")
+        self.assertEqual(requests[0]["body"]["source_keys"], ["all"])
+        self.assertEqual(requests[0]["body"]["item_count"], 5)
+        self.assertEqual(requests[0]["body"]["article_count"], 4)
+        self.assertEqual(requests[0]["body"]["social_post_count"], 1)
+        self.assertEqual(requests[0]["body"]["briefing_id"], "briefing-id-1")
 
 
 if __name__ == "__main__":

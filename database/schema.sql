@@ -63,6 +63,32 @@ create table if not exists public.briefing_items (
         unique (briefing_id, sort_order)
 );
 
+create table if not exists public.collector_runs (
+    id uuid primary key default gen_random_uuid(),
+    team_slug text not null,
+    briefing_type text not null,
+    status text not null,
+    source_keys text[] not null default '{}',
+    item_count integer not null default 0,
+    article_count integer not null default 0,
+    social_post_count integer not null default 0,
+    briefing_id uuid references public.briefings(id) on delete set null,
+    error_message text,
+    created_at timestamptz not null default now(),
+    constraint collector_runs_team_slug_check
+        check (team_slug <> ''),
+    constraint collector_runs_briefing_type_check
+        check (briefing_type in ('morning', 'afternoon', 'evening', 'transfer_extra', 'matchday')),
+    constraint collector_runs_status_check
+        check (status in ('success', 'failed')),
+    constraint collector_runs_item_count_check
+        check (item_count >= 0),
+    constraint collector_runs_article_count_check
+        check (article_count >= 0),
+    constraint collector_runs_social_post_count_check
+        check (social_post_count >= 0)
+);
+
 create index if not exists idx_briefings_team_published_at
     on public.briefings (team_slug, published_at desc);
 
@@ -78,6 +104,12 @@ create index if not exists idx_briefing_items_category
 create index if not exists idx_briefing_items_item_type
     on public.briefing_items (item_type);
 
+create index if not exists idx_collector_runs_team_created_at
+    on public.collector_runs (team_slug, created_at desc);
+
+create index if not exists idx_collector_runs_status_created_at
+    on public.collector_runs (status, created_at desc);
+
 drop trigger if exists set_briefings_updated_at on public.briefings;
 create trigger set_briefings_updated_at
     before update on public.briefings
@@ -86,6 +118,7 @@ create trigger set_briefings_updated_at
 
 alter table public.briefings enable row level security;
 alter table public.briefing_items enable row level security;
+alter table public.collector_runs enable row level security;
 
 drop policy if exists briefings_public_select on public.briefings;
 create policy briefings_public_select
@@ -100,6 +133,14 @@ create policy briefing_items_public_select
     for select
     to anon, authenticated
     using (true);
+
+drop policy if exists collector_runs_service_role_all on public.collector_runs;
+create policy collector_runs_service_role_all
+    on public.collector_runs
+    for all
+    to service_role
+    using (true)
+    with check (true);
 
 create or replace view public.latest_team_briefings
 with (security_invoker = true)

@@ -21,11 +21,11 @@ on:
       source:
         description: 설정된 수집 소스 key
         required: true
-        default: liverpool_echo
+        default: all
       limit:
         description: 처리할 최대 브리핑 항목 수
         required: true
-        default: "3"
+        default: "5"
       use_groq:
         description: Groq로 한국어 요약 생성
         required: true
@@ -47,6 +47,9 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+      X_CT0: ${{ secrets.X_CT0 }}
+      X_COOKIES_FILE: ${{ secrets.X_COOKIES_FILE }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -59,12 +62,15 @@ jobs:
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Install X collector dependencies
+        run: python3 -m pip install ".[x-twikit]"
+
       - name: Build briefing payload
         run: |
           TEAM="${{ github.event.inputs.team || 'liverpool' }}"
           BRIEFING_TYPE="${{ github.event.inputs.briefing_type }}"
-          SOURCE="${{ github.event.inputs.source || 'liverpool_echo' }}"
-          LIMIT="${{ github.event.inputs.limit || '3' }}"
+          SOURCE="${{ github.event.inputs.source || 'all' }}"
+          LIMIT="${{ github.event.inputs.limit || '5' }}"
           USE_GROQ="${{ github.event.inputs.use_groq || 'true' }}"
 
           if [ -z "$BRIEFING_TYPE" ]; then
@@ -90,7 +96,9 @@ jobs:
             --type "$BRIEFING_TYPE"
             --source "$SOURCE"
             --limit "$LIMIT"
+            --x-provider twikit
             --save-supabase
+            --save-monitoring
           )
 
           if [ "$USE_GROQ" = "true" ]; then

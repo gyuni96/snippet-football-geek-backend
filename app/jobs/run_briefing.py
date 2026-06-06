@@ -31,7 +31,12 @@ from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
 from app.sources import iter_collectable_sources, iter_collectable_x_profiles
 from app.state import load_last_success_at, save_last_success_at
-from app.supabase import SupabaseClient, fetch_latest_briefing_published_at, save_briefing_payload
+from app.supabase import (
+    SupabaseClient,
+    fetch_latest_briefing_published_at,
+    save_briefing_payload,
+    save_collector_run,
+)
 
 
 def main() -> None:
@@ -54,6 +59,7 @@ def main() -> None:
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
     parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
+    parser.add_argument("--save-monitoring", action="store_true", help="배치 실행 상태를 Supabase collector_runs에 저장합니다.")
     parser.add_argument("--x-provider", choices=["snscrape", "playwright", "twikit"], default="snscrape")
     parser.add_argument("--x-storage-state", default="x_storage_state.json")
     parser.add_argument("--x-cookies-file", default="x_cookies.json")
@@ -69,25 +75,51 @@ def main() -> None:
         save_supabase=args.save_supabase,
         supabase_client=supabase_client,
     )
-    payload = run_pipeline(
-        team_slug=args.team,
-        briefing_type=args.briefing_type,
-        rss_url=args.rss_url,
-        rss_source_name=args.rss_source_name,
-        source_keys=args.source_keys or None,
-        x_provider=args.x_provider,
-        x_storage_state=args.x_storage_state,
-        x_cookies_file=args.x_cookies_file,
-        since_text=since_text,
-        retention_days=args.retention_days,
-        state_file=Path(args.state_file) if args.state_file else None,
-        use_groq=args.use_groq,
-        groq_api_key=os.environ.get("GROQ_API_KEY"),
-        groq_model=args.groq_model,
-        limit=args.limit,
-    )
-    if args.save_supabase and should_save_payload_to_supabase(payload):
-        save_payload_to_supabase(payload, client=supabase_client)
+    payload = None
+    briefing_id = None
+    try:
+        payload = run_pipeline(
+            team_slug=args.team,
+            briefing_type=args.briefing_type,
+            rss_url=args.rss_url,
+            rss_source_name=args.rss_source_name,
+            source_keys=args.source_keys or None,
+            x_provider=args.x_provider,
+            x_storage_state=args.x_storage_state,
+            x_cookies_file=args.x_cookies_file,
+            since_text=since_text,
+            retention_days=args.retention_days,
+            state_file=Path(args.state_file) if args.state_file else None,
+            use_groq=args.use_groq,
+            groq_api_key=os.environ.get("GROQ_API_KEY"),
+            groq_model=args.groq_model,
+            limit=args.limit,
+        )
+        if args.save_supabase and should_save_payload_to_supabase(payload):
+            briefing_id = save_payload_to_supabase(payload, client=supabase_client)
+        if args.save_monitoring:
+            save_monitoring_run(
+                client=supabase_client,
+                team_slug=args.team,
+                briefing_type=args.briefing_type,
+                source_keys=args.source_keys or ["sample"],
+                payload=payload,
+                briefing_id=briefing_id,
+                status="success",
+            )
+    except Exception as error:
+        if args.save_monitoring:
+            save_monitoring_run(
+                client=supabase_client,
+                team_slug=args.team,
+                briefing_type=args.briefing_type,
+                source_keys=args.source_keys or ["sample"],
+                payload=payload,
+                briefing_id=briefing_id,
+                status="failed",
+                error_message=str(error),
+            )
+        raise
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
 
@@ -281,6 +313,32 @@ def should_save_payload_to_supabase(payload) -> bool:
 def save_payload_to_supabase(payload, client: Optional[SupabaseClient] = None) -> str:
     client = client or build_supabase_client_from_env()
     return save_briefing_payload(payload, client)
+
+
+def save_monitoring_run(
+    client: Optional[SupabaseClient],
+    team_slug: str,
+    briefing_type: str,
+    source_keys: List[str],
+    payload,
+    briefing_id: Optional[str],
+    status: str,
+    error_message: Optional[str] = None,
+) -> Optional[str]:
+    active_client = client or build_supabase_client_from_env()
+    items = payload.items if payload is not None else []
+    return save_collector_run(
+        active_client,
+        team_slug=team_slug,
+        briefing_type=briefing_type,
+        status=status,
+        source_keys=source_keys,
+        item_count=len(items),
+        article_count=sum(1 for item in items if item.source_type == "article"),
+        social_post_count=sum(1 for item in items if item.source_type == "social_post"),
+        briefing_id=briefing_id,
+        error_message=error_message,
+    )
 
 
 def normalize_items(raw_items: Iterable[RawItem]) -> Tuple[List[Article], List[SocialPost]]:
