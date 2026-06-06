@@ -33,6 +33,10 @@ class GithubActionsWorkflowTest(unittest.TestCase):
             content.index("python3 -m pip install \".[x-twikit]\""),
             content.index("python3 -m unittest discover -s tests -v"),
         )
+        self.assertLess(
+            content.index("python3 -m unittest discover -s tests -v"),
+            content.index("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}"),
+        )
         self.assertIn("default: all", content)
         self.assertIn("default: \"5\"", content)
         self.assertIn("--x-provider", content)

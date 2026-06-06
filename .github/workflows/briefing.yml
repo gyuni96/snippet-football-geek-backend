@@ -43,14 +43,6 @@ jobs:
   run-briefing:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
-      X_CT0: ${{ secrets.X_CT0 }}
-      X_COOKIES_FILE: ${{ secrets.X_COOKIES_FILE }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -67,6 +59,14 @@ jobs:
         run: python3 -m unittest discover -s tests -v
 
       - name: Build briefing payload
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+          X_CT0: ${{ secrets.X_CT0 }}
+          X_COOKIES_FILE: ${{ secrets.X_COOKIES_FILE }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           TEAM="${{ github.event.inputs.team || 'liverpool' }}"
           BRIEFING_TYPE="${{ github.event.inputs.briefing_type }}"
