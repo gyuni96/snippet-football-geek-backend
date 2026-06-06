@@ -31,6 +31,14 @@ on:
         required: true
         default: true
         type: boolean
+      groq_model:
+        description: Groq 모델. 테스트는 8B, 운영 기본은 70B를 권장합니다.
+        required: true
+        default: llama-3.3-70b-versatile
+        type: choice
+        options:
+          - llama-3.3-70b-versatile
+          - llama-3.1-8b-instant
   schedule:
     # 한국 시간 05:00 새벽/아침 브리핑
     - cron: "0 20 * * *"
@@ -75,6 +83,7 @@ jobs:
           SOURCE="${{ github.event.inputs.source || 'all' }}"
           LIMIT="${{ github.event.inputs.limit || '' }}"
           USE_GROQ="${{ github.event.inputs.use_groq || 'true' }}"
+          GROQ_MODEL="${{ github.event.inputs.groq_model || 'llama-3.3-70b-versatile' }}"
 
           if [ -z "$BRIEFING_TYPE" ]; then
             case "$(date -u +%H)" in
@@ -110,6 +119,7 @@ jobs:
 
           if [ "$USE_GROQ" = "true" ]; then
             CMD+=(--use-groq)
+            CMD+=(--groq-model "$GROQ_MODEL")
           fi
 
           "${CMD[@]}"
