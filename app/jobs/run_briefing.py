@@ -140,7 +140,7 @@ def main() -> None:
                 source_keys=args.source_keys or ["sample"],
                 payload=payload,
                 briefing_id=briefing_id,
-                status="success",
+                status=diagnostics.notification_status(),
             )
         if args.notify_discord:
             notify_discord_run(

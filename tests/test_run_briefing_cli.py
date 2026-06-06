@@ -11,6 +11,7 @@ from unittest.mock import patch
 from app.collectors.x_profiles import XProfileCollectionError
 from app.jobs.run_briefing import (
     is_x_auth_issue,
+    main,
     PipelineDiagnostics,
     resolve_since_text,
     run_pipeline,
@@ -192,6 +193,33 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertIn("JamesPearceLFC", diagnostics.x_auth_issue_handles)
         self.assertIn("auth_token cookie expired", stderr.getvalue())
+
+    def test_main_saves_warning_monitoring_status_for_partial_collection(self):
+        from datetime import datetime, timezone
+
+        payload = BriefingPayload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            title="리버풀 아침 브리핑",
+            summary_ko="출근길에 확인할 리버풀 핵심 소식 0건입니다.",
+            published_at=datetime(2026, 6, 6, 12, 0, tzinfo=timezone.utc),
+            items=[],
+        )
+        diagnostics = PipelineDiagnostics(
+            article_attempted=True,
+            article_succeeded=True,
+            x_attempted=True,
+            x_failed=True,
+        )
+
+        with patch("sys.argv", ["run_briefing", "--team", "liverpool", "--type", "morning", "--save-monitoring"]):
+            with patch("app.jobs.run_briefing.load_env_file"):
+                with patch("app.jobs.run_briefing.run_pipeline_with_diagnostics", return_value=(payload, diagnostics)):
+                    with patch("app.jobs.run_briefing.save_monitoring_run") as save_monitoring:
+                        with patch("sys.stdout", StringIO()):
+                            main()
+
+        self.assertEqual(save_monitoring.call_args.kwargs["status"], "warning")
 
     def test_pipeline_diagnostics_reports_warning_when_only_x_fails(self):
         diagnostics = PipelineDiagnostics(
