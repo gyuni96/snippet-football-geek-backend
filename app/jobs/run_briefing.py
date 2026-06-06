@@ -35,6 +35,7 @@ from app.groq import (
 )
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
+from app.notifications import DiscordNotifier, build_discord_run_message
 from app.relevance import score_liverpool_relevance
 from app.sources import iter_collectable_sources, iter_collectable_x_profiles
 from app.state import load_last_success_at, save_last_success_at
@@ -67,6 +68,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
     parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
     parser.add_argument("--save-monitoring", action="store_true", help="배치 실행 상태를 Supabase collector_runs에 저장합니다.")
+    parser.add_argument("--notify-discord", action="store_true", help="배치 실행 완료/실패 상태를 Discord webhook으로 전송합니다.")
     parser.add_argument("--x-provider", choices=["snscrape", "playwright", "twikit"], default="snscrape")
     parser.add_argument("--x-storage-state", default="x_storage_state.json")
     parser.add_argument("--x-cookies-file", default="x_cookies.json")
@@ -114,6 +116,16 @@ def main() -> None:
                 briefing_id=briefing_id,
                 status="success",
             )
+        if args.notify_discord:
+            notify_discord_run(
+                team_slug=args.team,
+                briefing_type=args.briefing_type,
+                source_keys=args.source_keys or ["sample"],
+                payload=payload,
+                briefing_id=briefing_id,
+                status="success",
+                github_run_url=build_github_run_url_from_env(),
+            )
     except Exception as error:
         if args.save_monitoring:
             save_monitoring_run(
@@ -125,6 +137,17 @@ def main() -> None:
                 briefing_id=briefing_id,
                 status="failed",
                 error_message=str(error),
+            )
+        if args.notify_discord:
+            notify_discord_run(
+                team_slug=args.team,
+                briefing_type=args.briefing_type,
+                source_keys=args.source_keys or ["sample"],
+                payload=payload,
+                briefing_id=briefing_id,
+                status="failed",
+                error_message=str(error),
+                github_run_url=build_github_run_url_from_env(),
             )
         raise
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
@@ -374,6 +397,46 @@ def save_monitoring_run(
         briefing_id=briefing_id,
         error_message=error_message,
     )
+
+
+def notify_discord_run(
+    team_slug: str,
+    briefing_type: str,
+    source_keys: List[str],
+    payload,
+    briefing_id: Optional[str],
+    status: str,
+    error_message: Optional[str] = None,
+    github_run_url: Optional[str] = None,
+) -> None:
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        print("Discord notification skipped: DISCORD_WEBHOOK_URL is not set.", file=sys.stderr)
+        return
+
+    message = build_discord_run_message(
+        team_slug=team_slug,
+        briefing_type=briefing_type,
+        status=status,
+        source_keys=source_keys,
+        payload=payload,
+        briefing_id=briefing_id,
+        error_message=error_message,
+        github_run_url=github_run_url,
+    )
+    try:
+        DiscordNotifier(webhook_url=webhook_url).send(message)
+    except RuntimeError as error:
+        print(f"Discord notification skipped: {error}", file=sys.stderr)
+
+
+def build_github_run_url_from_env() -> Optional[str]:
+    server_url = os.environ.get("GITHUB_SERVER_URL")
+    repository = os.environ.get("GITHUB_REPOSITORY")
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    if not server_url or not repository or not run_id:
+        return None
+    return f"{server_url}/{repository}/actions/runs/{run_id}"
 
 
 def normalize_items(raw_items: Iterable[RawItem]) -> Tuple[List[Article], List[SocialPost]]:

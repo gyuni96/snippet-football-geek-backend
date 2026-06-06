@@ -27,12 +27,14 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertIn("X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}", content)
         self.assertIn("X_CT0: ${{ secrets.X_CT0 }}", content)
         self.assertIn("X_COOKIES_FILE: ${{ secrets.X_COOKIES_FILE }}", content)
+        self.assertIn("DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}", content)
         self.assertIn("python3 -m pip install \".[x-twikit]\"", content)
         self.assertIn("default: all", content)
         self.assertIn("default: \"5\"", content)
         self.assertIn("--x-provider", content)
         self.assertIn("twikit", content)
         self.assertIn("--save-monitoring", content)
+        self.assertIn("--notify-discord", content)
 
 
 if __name__ == "__main__":
