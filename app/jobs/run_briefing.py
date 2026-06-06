@@ -43,6 +43,7 @@ def main() -> None:
     parser.add_argument("--state-file")
     parser.add_argument("--use-groq", action="store_true")
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
+    parser.add_argument("--limit", type=int, help="Limit briefing items after filtering. Useful for Groq tests.")
     args = parser.parse_args()
 
     load_env_file()
@@ -58,6 +59,7 @@ def main() -> None:
         use_groq=args.use_groq,
         groq_api_key=os.environ.get("GROQ_API_KEY"),
         groq_model=args.groq_model,
+        limit=args.limit,
     )
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
@@ -75,6 +77,7 @@ def run_pipeline(
     use_groq: bool = False,
     groq_api_key: Optional[str] = None,
     groq_model: str = DEFAULT_GROQ_MODEL,
+    limit: Optional[int] = None,
 ):
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
     since = parse_iso_datetime(since_text)
@@ -100,6 +103,11 @@ def run_pipeline(
     relevant_social_posts = [
         post for post in dedupe_social_posts(social_posts) if score_liverpool_relevance(post) != "low"
     ]
+    relevant_articles, relevant_social_posts = limit_items(
+        relevant_articles,
+        relevant_social_posts,
+        limit=limit,
+    )
     article_summarizer = None
     if use_groq:
         if not groq_api_key:
@@ -118,6 +126,22 @@ def run_pipeline(
         save_last_success_at(state_file, now)
 
     return payload
+
+
+def limit_items(
+    articles: List[Article],
+    social_posts: List[SocialPost],
+    limit: Optional[int],
+) -> Tuple[List[Article], List[SocialPost]]:
+    if limit is None:
+        return articles, social_posts
+    if limit <= 0:
+        return [], []
+
+    limited_articles = articles[:limit]
+    remaining = limit - len(limited_articles)
+    limited_social_posts = social_posts[:remaining] if remaining > 0 else []
+    return limited_articles, limited_social_posts
 
 
 def collect_raw_items(

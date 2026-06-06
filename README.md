@@ -94,6 +94,17 @@ python3 -m app.jobs.run_briefing \
   --use-groq
 ```
 
+Groq 프롬프트나 출력 구조를 확인할 때는 `--limit`으로 처리 건수를 줄일 수 있습니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source liverpool_echo \
+  --limit 3 \
+  --use-groq
+```
+
 ## 테스트
 
 ```bash

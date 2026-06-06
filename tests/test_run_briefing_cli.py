@@ -142,6 +142,52 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.items[0].headline_ko, "그록 헤드라인")
         self.assertEqual(payload.items[0].body_ko, "그록 요약 본문")
 
+    def test_run_pipeline_limits_relevant_items_before_groq_summarization(self):
+        first = _sample_raw_item(
+            external_id="first",
+            url="https://example.com/first-liverpool-story",
+        )
+        second = _sample_raw_item(
+            external_id="second",
+            url="https://example.com/second-liverpool-story",
+        )
+        third = _sample_raw_item(
+            external_id="third",
+            url="https://example.com/third-liverpool-story",
+        )
+        summarized_urls = []
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=[first, second, third]):
+            with patch("app.jobs.run_briefing.build_article_summarizer") as factory:
+                def fake_summarizer(article):
+                    summarized_urls.append(article.canonical_url)
+                    return {
+                        "headline_ko": f"요약 {article.external_id}",
+                        "body_ko": "제한된 항목만 요약합니다.",
+                        "confidence_label": "reported",
+                    }
+
+                factory.return_value = fake_summarizer
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo"],
+                    use_groq=True,
+                    groq_api_key="test-key",
+                    groq_model="test-model",
+                    limit=2,
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        self.assertEqual(len(payload.items), 2)
+        self.assertEqual(
+            summarized_urls,
+            [
+                "https://example.com/first-liverpool-story",
+                "https://example.com/second-liverpool-story",
+            ],
+        )
+
 
 def _sample_raw_item(
     external_id="rss-1",
