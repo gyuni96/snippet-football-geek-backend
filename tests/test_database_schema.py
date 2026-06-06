@@ -15,6 +15,7 @@ class DatabaseSchemaTest(unittest.TestCase):
         self.assertIn("briefing_id uuid not null references public.briefings(id)", content)
         self.assertIn("briefing_id uuid references public.briefings(id) on delete set null", content)
         self.assertIn("status text not null", content)
+        self.assertIn("check (status in ('success', 'warning', 'failed'))", content)
         self.assertIn("source_keys text[] not null", content)
         self.assertIn("item_count integer not null", content)
         self.assertIn("item_type text not null", content)

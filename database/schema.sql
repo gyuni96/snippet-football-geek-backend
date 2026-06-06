@@ -80,7 +80,7 @@ create table if not exists public.collector_runs (
     constraint collector_runs_briefing_type_check
         check (briefing_type in ('morning', 'afternoon', 'evening', 'transfer_extra', 'matchday')),
     constraint collector_runs_status_check
-        check (status in ('success', 'failed')),
+        check (status in ('success', 'warning', 'failed')),
     constraint collector_runs_item_count_check
         check (item_count >= 0),
     constraint collector_runs_article_count_check
