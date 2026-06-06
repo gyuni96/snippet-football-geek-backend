@@ -23,9 +23,9 @@ on:
         required: true
         default: all
       limit:
-        description: 처리할 최대 브리핑 항목 수
-        required: true
-        default: "5"
+        description: 처리할 최대 브리핑 항목 수. 비워두면 새 소식을 모두 처리합니다.
+        required: false
+        default: ""
       use_groq:
         description: Groq로 한국어 요약 생성
         required: true
@@ -71,7 +71,7 @@ jobs:
           TEAM="${{ github.event.inputs.team || 'liverpool' }}"
           BRIEFING_TYPE="${{ github.event.inputs.briefing_type }}"
           SOURCE="${{ github.event.inputs.source || 'all' }}"
-          LIMIT="${{ github.event.inputs.limit || '5' }}"
+          LIMIT="${{ github.event.inputs.limit || '' }}"
           USE_GROQ="${{ github.event.inputs.use_groq || 'true' }}"
 
           if [ -z "$BRIEFING_TYPE" ]; then
@@ -96,12 +96,15 @@ jobs:
             --team "$TEAM"
             --type "$BRIEFING_TYPE"
             --source "$SOURCE"
-            --limit "$LIMIT"
             --x-provider twikit
             --save-supabase
             --save-monitoring
             --notify-discord
           )
+
+          if [ -n "$LIMIT" ]; then
+            CMD+=(--limit "$LIMIT")
+          fi
 
           if [ "$USE_GROQ" = "true" ]; then
             CMD+=(--use-groq)

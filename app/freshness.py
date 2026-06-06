@@ -27,6 +27,7 @@ def filter_fresh_items(
     since: Optional[datetime],
     retention_days: int,
     now: Optional[datetime] = None,
+    until: Optional[datetime] = None,
 ) -> List[RawItem]:
     current_time = now or datetime.now(timezone.utc)
     retention_cutoff = current_time - timedelta(days=retention_days)
@@ -37,6 +38,8 @@ def filter_fresh_items(
         if published_at < retention_cutoff:
             continue
         if since is not None and published_at <= since:
+            continue
+        if until is not None and published_at > until:
             continue
         filtered.append(item)
 

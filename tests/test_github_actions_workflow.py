@@ -19,6 +19,10 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertIn("python3 -m app.jobs.run_briefing", content)
         self.assertIn("--source", content)
         self.assertIn("--limit", content)
+        self.assertIn("default: \"\"", content)
+        self.assertIn("if [ -n \"$LIMIT\" ]; then", content)
+        self.assertIn("CMD+=(--limit \"$LIMIT\")", content)
+        self.assertNotIn("LIMIT=\"${{ github.event.inputs.limit || '5' }}\"", content)
         self.assertIn("--use-groq", content)
         self.assertIn("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}", content)
         self.assertIn("SUPABASE_URL: ${{ secrets.SUPABASE_URL }}", content)
@@ -38,7 +42,6 @@ class GithubActionsWorkflowTest(unittest.TestCase):
             content.index("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}"),
         )
         self.assertIn("default: all", content)
-        self.assertIn("default: \"5\"", content)
         self.assertIn("--x-provider", content)
         self.assertIn("twikit", content)
         self.assertIn("--save-monitoring", content)

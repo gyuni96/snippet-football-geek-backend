@@ -27,6 +27,22 @@ class FreshnessTest(unittest.TestCase):
 
         self.assertEqual(parsed, datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc))
 
+    def test_filters_items_after_until(self):
+        now = datetime(2026, 6, 7, 0, 0, tzinfo=timezone.utc)
+        until = datetime(2026, 6, 6, 15, 0, tzinfo=timezone.utc)
+        in_range = _raw_item("in-range", datetime(2026, 6, 6, 14, 30, tzinfo=timezone.utc))
+        after_until = _raw_item("after-until", datetime(2026, 6, 6, 15, 30, tzinfo=timezone.utc))
+
+        filtered = filter_fresh_items(
+            [in_range, after_until],
+            since=None,
+            retention_days=7,
+            now=now,
+            until=until,
+        )
+
+        self.assertEqual(filtered, [in_range])
+
 
 def _raw_item(external_id, published_at):
     return RawItem(

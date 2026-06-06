@@ -87,7 +87,9 @@ def main() -> None:
         help="수집할 설정 소스 key입니다. 여러 번 사용할 수 있고, 전체 수집은 'all'을 사용합니다.",
     )
     parser.add_argument("--since", dest="since_text")
+    parser.add_argument("--until", dest="until_text", help="이 시각 이후에 발행된 항목은 제외합니다. 백필 작업에 유용합니다.")
     parser.add_argument("--retention-days", type=int, default=7)
+    parser.add_argument("--now", dest="now_text", help="브리핑 published_at으로 사용할 시각입니다. 백필 작업에 유용합니다.")
     parser.add_argument("--state-file")
     parser.add_argument("--use-groq", action="store_true")
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
@@ -123,7 +125,9 @@ def main() -> None:
             x_storage_state=args.x_storage_state,
             x_cookies_file=args.x_cookies_file,
             since_text=since_text,
+            until_text=args.until_text,
             retention_days=args.retention_days,
+            now_text=args.now_text,
             state_file=Path(args.state_file) if args.state_file else None,
             use_groq=args.use_groq,
             groq_api_key=os.environ.get("GROQ_API_KEY"),
@@ -190,6 +194,7 @@ def run_pipeline(
     x_storage_state: str = "x_storage_state.json",
     x_cookies_file: str = "x_cookies.json",
     since_text: Optional[str] = None,
+    until_text: Optional[str] = None,
     retention_days: int = 7,
     now_text: Optional[str] = None,
     state_file: Optional[Path] = None,
@@ -208,6 +213,7 @@ def run_pipeline(
         x_storage_state=x_storage_state,
         x_cookies_file=x_cookies_file,
         since_text=since_text,
+        until_text=until_text,
         retention_days=retention_days,
         now_text=now_text,
         state_file=state_file,
@@ -229,6 +235,7 @@ def run_pipeline_with_diagnostics(
     x_storage_state: str = "x_storage_state.json",
     x_cookies_file: str = "x_cookies.json",
     since_text: Optional[str] = None,
+    until_text: Optional[str] = None,
     retention_days: int = 7,
     now_text: Optional[str] = None,
     state_file: Optional[Path] = None,
@@ -240,6 +247,7 @@ def run_pipeline_with_diagnostics(
     diagnostics = PipelineDiagnostics()
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
     since = parse_iso_datetime(since_text)
+    until = parse_iso_datetime(until_text)
     if since is None and state_file is not None:
         since = load_last_success_at(state_file)
 
@@ -258,6 +266,7 @@ def run_pipeline_with_diagnostics(
         since=since,
         retention_days=retention_days,
         now=now,
+        until=until,
     )
     articles, social_posts = normalize_items(raw_items)
     relevant_articles = [

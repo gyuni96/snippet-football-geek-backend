@@ -108,7 +108,15 @@ def _summarize_article(
             "category": classify_article(article),
         }
 
-    summary = article_summarizer(article)
+    try:
+        summary = article_summarizer(article)
+    except RuntimeError:
+        return {
+            "headline_ko": _article_headline(article),
+            "body_ko": _article_body(article),
+            "confidence_label": "reported",
+            "category": classify_article(article),
+        }
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
@@ -130,7 +138,16 @@ def _summarize_social_post(
             "category": category,
         }
 
-    summary = social_post_summarizer(post)
+    try:
+        summary = social_post_summarizer(post)
+    except RuntimeError:
+        category = classify_social_post(post)
+        return {
+            "headline_ko": f"{post.source_name} 기자 신호",
+            "body_ko": f"{post.source_name}는 X에서 '{post.text}'라고 전했습니다.",
+            "confidence_label": "reporter_claim",
+            "category": category,
+        }
     return {
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],

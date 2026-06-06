@@ -87,6 +87,32 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[0].category, "transfer")
 
+    def test_falls_back_when_social_post_summarizer_fails(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        social_post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="James Pearce",
+            external_post_id="post-1",
+            author_handle="JamesPearceLFC",
+            text="Liverpool are not planning to sell the player this summer.",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at=published_at,
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[],
+            social_posts=[social_post],
+            published_at=published_at,
+            social_post_summarizer=lambda item: (_ for _ in ()).throw(RuntimeError("Groq failed")),
+        )
+
+        self.assertEqual(payload.items[0].headline_ko, "James Pearce 기자 신호")
+        self.assertIn("James Pearce는 X에서", payload.items[0].body_ko)
+        self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
+
     def test_builds_article_item_with_groq_summarizer_when_provided(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
         article = Article(
@@ -118,6 +144,32 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
+
+    def test_falls_back_when_article_summarizer_fails(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/liverpool-midfielder",
+            title="Liverpool monitor midfield target",
+            body="Liverpool are watching a midfielder ahead of the summer window.",
+            published_at=published_at,
+            author="Reporter",
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[article],
+            social_posts=[],
+            published_at=published_at,
+            article_summarizer=lambda item: (_ for _ in ()).throw(RuntimeError("Groq failed")),
+        )
+
+        self.assertEqual(payload.items[0].headline_ko, "이적시장 체크 포인트")
+        self.assertIn("Liverpool Echo 보도에 따르면", payload.items[0].body_ko)
+        self.assertEqual(payload.items[0].confidence_label, "reported")
 
     def test_builds_article_item_with_multiple_sources(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
