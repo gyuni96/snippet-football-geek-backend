@@ -55,7 +55,7 @@ def build_discord_run_message(
     items = payload.items if payload is not None else []
     article_count = sum(1 for item in items if item.source_type == "article")
     social_post_count = sum(1 for item in items if item.source_type == "social_post")
-    is_success = status == "success"
+    status_meta = _notification_status_meta(status)
     fields = [
         {"name": "팀", "value": team_slug, "inline": True},
         {"name": "브리핑", "value": briefing_type, "inline": True},
@@ -64,8 +64,6 @@ def build_discord_run_message(
             "value": f"총 {len(items)}개 / 기사 {article_count}개 / X {social_post_count}개",
             "inline": False,
         },
-        {"name": "저장", "value": briefing_id or "저장 안 됨", "inline": False},
-        {"name": "소스", "value": ", ".join(source_keys), "inline": False},
     ]
     if github_run_url:
         fields.append({"name": "GitHub Actions", "value": github_run_url, "inline": False})
@@ -76,11 +74,11 @@ def build_discord_run_message(
         fields.append({"name": "오류", "value": _trim_discord_field(error_message), "inline": False})
 
     return {
-        "content": "수집 완료" if is_success else "수집 실패",
+        "content": status_meta["content"],
         "embeds": [
             {
-                "title": "Liverpool Briefing 수집 성공" if is_success else "Liverpool Briefing 수집 실패",
-                "color": 0x2ECC71 if is_success else 0xE74C3C,
+                "title": status_meta["title"],
+                "color": status_meta["color"],
                 "fields": fields,
             }
         ],
@@ -89,6 +87,26 @@ def build_discord_run_message(
 
 def _trim_discord_field(value: str) -> str:
     return value if len(value) <= 1000 else f"{value[:997]}..."
+
+
+def _notification_status_meta(status: str) -> Dict[str, Any]:
+    if status == "warning":
+        return {
+            "content": "⚠️ 부분 수집 완료",
+            "title": "⚠️ Liverpool Briefing 부분 수집",
+            "color": 0xF1C40F,
+        }
+    if status == "failed":
+        return {
+            "content": "❌ 수집 실패",
+            "title": "❌ Liverpool Briefing 수집 실패",
+            "color": 0xE74C3C,
+        }
+    return {
+        "content": "✅ 수집 완료",
+        "title": "✅ Liverpool Briefing 수집 성공",
+        "color": 0x2ECC71,
+    }
 
 
 def _read_error_body(error: HTTPError) -> str:

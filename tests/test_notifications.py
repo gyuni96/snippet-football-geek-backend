@@ -33,16 +33,29 @@ class DiscordNotificationTest(unittest.TestCase):
             x_auth_issue_handles=["JamesPearceLFC", "FabrizioRomano"],
         )
 
-        self.assertIn("수집 완료", message["content"])
-        self.assertEqual(message["embeds"][0]["title"], "Liverpool Briefing 수집 성공")
+        self.assertEqual(message["content"], "✅ 수집 완료")
+        self.assertEqual(message["embeds"][0]["title"], "✅ Liverpool Briefing 수집 성공")
         fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
         self.assertEqual(fields["팀"], "liverpool")
         self.assertEqual(fields["브리핑"], "morning")
         self.assertEqual(fields["항목"], "총 2개 / 기사 1개 / X 1개")
-        self.assertEqual(fields["저장"], "briefing-1")
-        self.assertEqual(fields["소스"], "all")
+        self.assertNotIn("저장", fields)
+        self.assertNotIn("소스", fields)
         self.assertEqual(fields["GitHub Actions"], "https://github.com/example/repo/actions/runs/1")
         self.assertEqual(fields["⚠️ X 인증 상태"], "⚠️ 토큰/쿠키 만료 의심: @JamesPearceLFC, @FabrizioRomano")
+
+    def test_omits_x_auth_status_when_no_auth_issue_exists(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="success",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+        )
+
+        fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
+        self.assertNotIn("⚠️ X 인증 상태", fields)
 
     def test_builds_failed_message_with_error_text(self):
         message = build_discord_run_message(
@@ -55,11 +68,28 @@ class DiscordNotificationTest(unittest.TestCase):
             error_message="Groq API failed",
         )
 
-        self.assertIn("실패", message["content"])
+        self.assertEqual(message["content"], "❌ 수집 실패")
+        self.assertEqual(message["embeds"][0]["title"], "❌ Liverpool Briefing 수집 실패")
         fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
         self.assertEqual(fields["항목"], "총 0개 / 기사 0개 / X 0개")
-        self.assertEqual(fields["저장"], "저장 안 됨")
+        self.assertNotIn("저장", fields)
+        self.assertNotIn("소스", fields)
         self.assertEqual(fields["오류"], "Groq API failed")
+
+    def test_builds_warning_message_for_partial_collection(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="warning",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+            error_message="X 수집 일부 실패",
+        )
+
+        self.assertEqual(message["content"], "⚠️ 부분 수집 완료")
+        self.assertEqual(message["embeds"][0]["title"], "⚠️ Liverpool Briefing 부분 수집")
+        self.assertEqual(message["embeds"][0]["color"], 0xF1C40F)
 
     def test_discord_notifier_posts_json_payload(self):
         requests = []

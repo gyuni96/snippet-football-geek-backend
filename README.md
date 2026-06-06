@@ -258,7 +258,7 @@ MVP 저장 구조는 `briefings`와 `briefing_items` 두 테이블입니다. `br
 - X 수집을 GitHub Actions에서 사용하려면 `X_AUTH_TOKEN`, `X_CT0`, `X_COOKIES_FILE`도 Repository secrets에 직접 등록해야 합니다.
 - Discord 알림을 사용하려면 `DISCORD_WEBHOOK_URL`도 Repository secrets에 등록해야 합니다.
 - 실행 상태는 Supabase `collector_runs` 테이블에 저장합니다.
-- 실행 완료/실패 상태는 Discord webhook으로 전송합니다.
+- 실행 상태는 Discord webhook으로 전송합니다. 기사와 X가 모두 성공하면 `✅ 수집 완료`, 둘 중 하나만 실패하면 `⚠️ 부분 수집 완료`, 시도한 수집 타입이 모두 실패하면 `❌ 수집 실패`로 표시합니다.
 - X 수집 중 `401`, `403`, `auth_token`, `ct0`, `cookie`, `login` 같은 인증 문제가 감지되면 Discord 알림의 `X 인증 상태` 필드에 토큰/쿠키 만료 의심 계정을 표시합니다.
 - Actions 로그에는 콘솔 JSON도 함께 남습니다.
 

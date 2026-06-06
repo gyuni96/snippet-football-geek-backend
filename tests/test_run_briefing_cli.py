@@ -11,6 +11,7 @@ from unittest.mock import patch
 from app.collectors.x_profiles import XProfileCollectionError
 from app.jobs.run_briefing import (
     is_x_auth_issue,
+    PipelineDiagnostics,
     resolve_since_text,
     run_pipeline,
     run_pipeline_with_diagnostics,
@@ -191,6 +192,36 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertIn("JamesPearceLFC", diagnostics.x_auth_issue_handles)
         self.assertIn("auth_token cookie expired", stderr.getvalue())
+
+    def test_pipeline_diagnostics_reports_warning_when_only_x_fails(self):
+        diagnostics = PipelineDiagnostics(
+            article_attempted=True,
+            article_succeeded=True,
+            x_attempted=True,
+            x_failed=True,
+        )
+
+        self.assertEqual(diagnostics.notification_status(), "warning")
+
+    def test_pipeline_diagnostics_reports_failed_when_articles_and_x_fail(self):
+        diagnostics = PipelineDiagnostics(
+            article_attempted=True,
+            article_failed=True,
+            x_attempted=True,
+            x_failed=True,
+        )
+
+        self.assertEqual(diagnostics.notification_status(), "failed")
+
+    def test_pipeline_diagnostics_reports_success_when_articles_and_x_succeed(self):
+        diagnostics = PipelineDiagnostics(
+            article_attempted=True,
+            article_succeeded=True,
+            x_attempted=True,
+            x_succeeded=True,
+        )
+
+        self.assertEqual(diagnostics.notification_status(), "success")
 
     def test_is_x_auth_issue_detects_expired_token_errors(self):
         self.assertTrue(is_x_auth_issue("401 Unauthorized: auth_token cookie expired"))

@@ -50,7 +50,27 @@ from app.supabase import (
 
 @dataclass
 class PipelineDiagnostics:
+    article_attempted: bool = False
+    article_succeeded: bool = False
+    article_failed: bool = False
+    x_attempted: bool = False
+    x_succeeded: bool = False
+    x_failed: bool = False
     x_auth_issue_handles: List[str] = field(default_factory=list)
+
+    def notification_status(self) -> str:
+        attempted = []
+        if self.article_attempted:
+            attempted.append((self.article_succeeded, self.article_failed))
+        if self.x_attempted:
+            attempted.append((self.x_succeeded, self.x_failed))
+        if not attempted:
+            return "success"
+        all_failed = all(failed and not succeeded for succeeded, failed in attempted)
+        if all_failed:
+            return "failed"
+        has_failure = any(failed for _succeeded, failed in attempted)
+        return "warning" if has_failure else "success"
 
 
 def main() -> None:
@@ -129,7 +149,7 @@ def main() -> None:
                 source_keys=args.source_keys or ["sample"],
                 payload=payload,
                 briefing_id=briefing_id,
-                status="success",
+                status=diagnostics.notification_status(),
                 github_run_url=build_github_run_url_from_env(),
                 x_auth_issue_handles=diagnostics.x_auth_issue_handles,
             )
@@ -306,16 +326,28 @@ def collect_raw_items(
     diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> List[RawItem]:
     if rss_url:
-        return collect_rss_items(
-            feed_url=rss_url,
-            team_slug=team_slug,
-            source_name=rss_source_name,
-        )
+        if diagnostics is not None:
+            diagnostics.article_attempted = True
+        try:
+            items = collect_rss_items(
+                feed_url=rss_url,
+                team_slug=team_slug,
+                source_name=rss_source_name,
+            )
+            if diagnostics is not None:
+                diagnostics.article_succeeded = True
+            return items
+        except Exception:
+            if diagnostics is not None:
+                diagnostics.article_failed = True
+            raise
 
     if source_keys:
         raw_items: List[RawItem] = []
         for source in iter_collectable_sources(source_keys):
             if source.rss_url:
+                if diagnostics is not None:
+                    diagnostics.article_attempted = True
                 try:
                     raw_items.extend(
                         collect_rss_items(
@@ -324,7 +356,11 @@ def collect_raw_items(
                             source_name=source.name,
                         )
                     )
+                    if diagnostics is not None:
+                        diagnostics.article_succeeded = True
                 except Exception as error:
+                    if diagnostics is not None:
+                        diagnostics.article_failed = True
                     print(
                         f"RSS collection skipped for {source.key}: {error}",
                         file=sys.stderr,
@@ -333,6 +369,8 @@ def collect_raw_items(
 
             listing_url = getattr(source, "listing_url", None)
             if listing_url:
+                if diagnostics is not None:
+                    diagnostics.article_attempted = True
                 try:
                     raw_items.extend(
                         collect_html_listing_items(
@@ -342,7 +380,11 @@ def collect_raw_items(
                             required_terms=getattr(source, "listing_required_terms", ()),
                         )
                     )
+                    if diagnostics is not None:
+                        diagnostics.article_succeeded = True
                 except Exception as error:
+                    if diagnostics is not None:
+                        diagnostics.article_failed = True
                     print(
                         f"HTML listing collection skipped for {source.key}: {error}",
                         file=sys.stderr,
@@ -353,6 +395,8 @@ def collect_raw_items(
             cookies_file=x_cookies_file,
         )
         for profile in iter_collectable_x_profiles(source_keys):
+            if diagnostics is not None:
+                diagnostics.x_attempted = True
             try:
                 raw_items.extend(
                     collect_x_profile_items(
@@ -361,7 +405,11 @@ def collect_raw_items(
                         post_provider=x_post_provider,
                     )
                 )
+                if diagnostics is not None:
+                    diagnostics.x_succeeded = True
             except XProfileCollectionError as error:
+                if diagnostics is not None:
+                    diagnostics.x_failed = True
                 if diagnostics is not None and is_x_auth_issue(str(error)):
                     diagnostics.x_auth_issue_handles.append(profile.handle)
                 print(
