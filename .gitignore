@@ -10,5 +10,6 @@ __pycache__/
 .venv/
 venv/
 .runtime/
+x_storage_state.json
 
 docs/

@@ -5,8 +5,10 @@ import unittest
 from app.collectors.x_profiles import (
     XProfileCollectionError,
     XProfilePost,
+    build_playwright_post_provider,
     build_snscrape_post_provider,
     collect_x_profile_items,
+    parse_x_datetime,
 )
 from app.sources import get_x_profile
 
@@ -88,6 +90,102 @@ class XProfileCollectorTest(unittest.TestCase):
 
         self.assertIn("JamesPearceLFC", str(context.exception))
         self.assertIn("blocked (404)", str(context.exception))
+
+    def test_parse_x_datetime_accepts_z_suffix(self):
+        parsed = parse_x_datetime("2026-06-06T09:00:00.000Z")
+
+        self.assertEqual(parsed, datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc))
+
+    def test_playwright_provider_collects_profile_articles(self):
+        captured = {}
+        published_at = "2026-06-06T09:00:00.000Z"
+
+        class FakeElement:
+            def __init__(self, text, attributes=None):
+                self.text = text
+                self.attributes = attributes or {}
+
+            def text_content(self):
+                return self.text
+
+            def get_attribute(self, name):
+                return self.attributes.get(name)
+
+        class FakeArticle:
+            def query_selector(self, selector):
+                if selector == "[data-testid='tweetText']":
+                    return FakeElement("Liverpool are monitoring a transfer target.")
+                if selector == "time":
+                    return FakeElement("", {"datetime": published_at})
+                return None
+
+            def get_attribute(self, name):
+                if name == "datetime":
+                    return published_at
+                return None
+
+            def query_selector_all(self, selector):
+                if selector == "a[href*='/status/']":
+                    return [SimpleNamespace(get_attribute=lambda name: "/JamesPearceLFC/status/123")]
+                return []
+
+        class FakePage:
+            def goto(self, url, wait_until, timeout):
+                captured["url"] = url
+                captured["wait_until"] = wait_until
+                captured["timeout"] = timeout
+
+            def wait_for_selector(self, selector, timeout):
+                captured["selector"] = selector
+
+            def query_selector_all(self, selector):
+                return [FakeArticle()]
+
+        class FakeContext:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                pass
+
+            def new_page(self):
+                return FakePage()
+
+        class FakeBrowser:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                pass
+
+            def new_context(self, storage_state):
+                captured["storage_state"] = storage_state
+                return FakeContext()
+
+        class FakeChromium:
+            def launch(self, headless):
+                captured["headless"] = headless
+                return FakeBrowser()
+
+        class FakePlaywright:
+            chromium = FakeChromium()
+
+        provider = build_playwright_post_provider(
+            storage_state_path="x_storage_state.json",
+            max_posts=1,
+            playwright_factory=lambda: FakePlaywright(),
+        )
+
+        posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(captured["url"], "https://x.com/JamesPearceLFC")
+        self.assertEqual(captured["storage_state"], "x_storage_state.json")
+        self.assertTrue(captured["headless"])
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0].post_id, "123")
+        self.assertEqual(posts[0].text, "Liverpool are monitoring a transfer target.")
+        self.assertEqual(posts[0].url, "https://x.com/JamesPearceLFC/status/123")
+        self.assertEqual(posts[0].published_at, datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc))
 
 
 if __name__ == "__main__":

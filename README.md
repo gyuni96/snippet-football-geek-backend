@@ -74,6 +74,27 @@ python3 -m pip install ".[x]"
 
 현재 로컬 live 테스트에서는 `snscrape`가 X/Twitter GraphQL 요청에서 `blocked (404)`로 실패했습니다. 그래서 구조와 변환 로직은 준비됐지만, 운영 수집 방식은 Playwright 기반 스크래핑이나 인증 세션 기반 provider로 이어서 보강해야 합니다.
 
+Playwright 로그인 세션을 만들려면 선택 의존성과 브라우저를 설치한 뒤 세션 캡처 스크립트를 실행합니다.
+
+```bash
+python3 -m pip install ".[x-playwright]"
+python3 -m playwright install chromium
+python3 -m app.jobs.capture_x_session
+```
+
+브라우저에서 X 로그인을 완료하고 Enter를 누르면 `x_storage_state.json`이 생성됩니다. 이 파일은 `.gitignore`에 포함되어 있으며 커밋하지 않습니다.
+
+세션 파일 생성 후에는 Playwright provider를 선택해서 X 프로필 소스를 실행할 수 있습니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source x_reporters \
+  --x-provider playwright \
+  --x-storage-state x_storage_state.json
+```
+
 새로운 소식만 확인하려면 `--since`를 지정합니다. 데이터 보관 정책은 기본 7일 기준으로 보고, 그보다 오래된 항목은 콘솔 payload 생성 전에 제외합니다.
 
 ```bash

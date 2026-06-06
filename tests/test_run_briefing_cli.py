@@ -108,6 +108,22 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.items[0].source_type, "social_post")
         self.assertEqual(payload.items[0].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
 
+    def test_cli_supports_x_provider_option(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "app.jobs.run_briefing",
+                "--help",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn("--x-provider", completed.stdout)
+        self.assertIn("--x-storage-state", completed.stdout)
+
     def test_run_pipeline_uses_state_file_since_and_updates_state(self):
         fresh_item = _sample_raw_item(
             external_id="fresh",

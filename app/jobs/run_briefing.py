@@ -14,7 +14,11 @@ from typing import Callable, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
-from app.collectors.x_profiles import collect_x_profile_items
+from app.collectors.x_profiles import (
+    build_playwright_post_provider,
+    build_snscrape_post_provider,
+    collect_x_profile_items,
+)
 from app.dedupe import dedupe_articles, dedupe_social_posts
 from app.env import load_env_file
 from app.freshness import filter_fresh_items, parse_iso_datetime
@@ -47,6 +51,8 @@ def main() -> None:
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
     parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
+    parser.add_argument("--x-provider", choices=["snscrape", "playwright"], default="snscrape")
+    parser.add_argument("--x-storage-state", default="x_storage_state.json")
     args = parser.parse_args()
 
     load_env_file()
@@ -65,6 +71,8 @@ def main() -> None:
         rss_url=args.rss_url,
         rss_source_name=args.rss_source_name,
         source_keys=args.source_keys or None,
+        x_provider=args.x_provider,
+        x_storage_state=args.x_storage_state,
         since_text=since_text,
         retention_days=args.retention_days,
         state_file=Path(args.state_file) if args.state_file else None,
@@ -84,6 +92,8 @@ def run_pipeline(
     rss_url: Optional[str] = None,
     rss_source_name: str = "RSS Feed",
     source_keys: Optional[List[str]] = None,
+    x_provider: str = "snscrape",
+    x_storage_state: str = "x_storage_state.json",
     since_text: Optional[str] = None,
     retention_days: int = 7,
     now_text: Optional[str] = None,
@@ -103,6 +113,8 @@ def run_pipeline(
         rss_url=rss_url,
         rss_source_name=rss_source_name,
         source_keys=source_keys,
+        x_provider=x_provider,
+        x_storage_state=x_storage_state,
     )
     raw_items = filter_fresh_items(
         raw_items,
@@ -163,6 +175,8 @@ def collect_raw_items(
     rss_url: Optional[str],
     rss_source_name: str,
     source_keys: Optional[List[str]] = None,
+    x_provider: str = "snscrape",
+    x_storage_state: str = "x_storage_state.json",
 ) -> List[RawItem]:
     if rss_url:
         return collect_rss_items(
@@ -181,16 +195,27 @@ def collect_raw_items(
                     source_name=source.name,
                 )
             )
+        x_post_provider = build_x_post_provider(
+            provider_name=x_provider,
+            storage_state_path=x_storage_state,
+        )
         for profile in iter_collectable_x_profiles(source_keys):
             raw_items.extend(
                 collect_x_profile_items(
                     profile=profile,
                     team_slug=team_slug,
+                    post_provider=x_post_provider,
                 )
             )
         return raw_items
 
     return sample_raw_items(team_slug)
+
+
+def build_x_post_provider(provider_name: str, storage_state_path: str):
+    if provider_name == "playwright":
+        return build_playwright_post_provider(storage_state_path=storage_state_path)
+    return build_snscrape_post_provider()
 
 
 def build_article_summarizer(api_key: str, model: str) -> Callable[[Article], dict]:

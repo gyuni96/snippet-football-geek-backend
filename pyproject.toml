@@ -12,3 +12,6 @@ requires-python = ">=3.9"
 x = [
     "snscrape",
 ]
+x-playwright = [
+    "playwright",
+]
