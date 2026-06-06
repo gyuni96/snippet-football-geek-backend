@@ -1,3 +1,10 @@
+"""Freshness and retention filtering.
+
+The service is meant to collect only newly published team news and keep a short
+window of data. This module filters out items published before the last
+successful run or outside the retention period.
+"""
+
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List, Optional
 

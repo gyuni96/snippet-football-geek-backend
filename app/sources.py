@@ -1,3 +1,10 @@
+"""Temporary Liverpool source configuration.
+
+These source definitions let the CLI collect configured feeds by key, such as
+`liverpool_echo`. Sources without RSS URLs can stay documented here while being
+skipped by the current RSS-only collector.
+"""
+
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional
 

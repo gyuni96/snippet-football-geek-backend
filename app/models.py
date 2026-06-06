@@ -1,3 +1,11 @@
+"""Shared data shapes used throughout the briefing pipeline.
+
+The backend moves data through a few stages: raw collected data, normalized
+article/social records, and final briefing output. These dataclasses define
+those shapes so every module passes around predictable objects instead of loose
+dictionaries.
+"""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional

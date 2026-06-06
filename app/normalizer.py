@@ -1,3 +1,10 @@
+"""Normalize raw collected items into typed internal records.
+
+Collectors return `RawItem` because every source has a different shape. This
+module converts those raw records into either `Article` or `SocialPost`, which
+the rest of the pipeline can process consistently.
+"""
+
 from typing import Union
 
 from app.models import Article, RawItem, SocialPost

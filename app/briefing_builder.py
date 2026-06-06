@@ -1,3 +1,10 @@
+"""Build the final briefing payload shown in console output.
+
+The builder turns filtered articles and social posts into `BriefingPayload`.
+It can use local template text or an injected article summarizer, such as the
+Groq summarizer, while keeping the output shape the same.
+"""
+
 from datetime import datetime
 from typing import Callable, Dict, Iterable, List, Optional
 

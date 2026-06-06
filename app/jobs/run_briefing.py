@@ -1,3 +1,10 @@
+"""CLI entrypoint for running the briefing pipeline.
+
+This is the current MVP orchestrator. It collects raw items, applies freshness
+and relevance filters, optionally summarizes articles with Groq, and prints the
+Supabase-ready briefing JSON to stdout instead of writing to a database.
+"""
+
 import argparse
 import json
 import os

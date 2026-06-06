@@ -1,3 +1,10 @@
+"""Liverpool relevance scoring.
+
+This module decides whether a normalized article or social post is worth
+including before expensive steps like Groq summarization. The MVP uses simple
+keyword rules and returns broad labels such as `high` or `low`.
+"""
+
 from typing import Union
 
 from app.models import Article, SocialPost

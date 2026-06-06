@@ -1,3 +1,10 @@
+"""Local collection state storage.
+
+Until Supabase is connected, this module stores the last successful collection
+timestamp in a local JSON file. The next run can use that timestamp as `since`
+so only new items are processed.
+"""
+
 import json
 from datetime import datetime
 from pathlib import Path

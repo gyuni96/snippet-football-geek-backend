@@ -1,3 +1,10 @@
+"""Minimal `.env` loader for local development.
+
+The project avoids adding dependencies at this stage, so this module reads
+simple KEY=VALUE lines from `.env` and fills missing process environment
+variables. Existing environment values are not overwritten.
+"""
+
 import os
 from pathlib import Path
 from typing import MutableMapping, Optional, Union

@@ -1,3 +1,10 @@
+"""Groq API client and article summarization prompts.
+
+This module wraps Groq's OpenAI-compatible chat completions endpoint and turns
+an `Article` into a Korean briefing summary. The CLI can enable this with
+`--use-groq`; otherwise the pipeline keeps using local template text.
+"""
+
 import json
 from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError

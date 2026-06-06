@@ -1,3 +1,10 @@
+"""Small deduplication rules for collected content.
+
+The first MVP pass removes obvious duplicates only: same article URL or same X
+post id. More advanced story clustering can be added later without changing the
+collector layer.
+"""
+
 from typing import Iterable, List, Set
 
 from app.models import Article, SocialPost

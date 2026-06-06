@@ -1,3 +1,10 @@
+"""RSS collection helpers.
+
+This module downloads an RSS feed and converts each `<item>` into `RawItem`.
+It intentionally stops at raw collection: filtering, deduplication, and
+summarization happen later in the pipeline.
+"""
+
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Callable, List, Optional
