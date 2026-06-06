@@ -16,5 +16,5 @@ x-playwright = [
     "playwright",
 ]
 x-twikit = [
-    "twikit==1.0.8",
+    "twikit==2.3.3",
 ]

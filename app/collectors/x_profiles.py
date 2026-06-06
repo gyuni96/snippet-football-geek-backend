@@ -5,6 +5,7 @@ post_provider를 주입해 수집 방식을 교체할 수 있습니다.
 """
 
 import asyncio
+import base64
 import inspect
 import json
 import os
@@ -181,7 +182,31 @@ def _load_twikit_client():
             "twikit is required for X profile collection. Install it with `python3 -m pip install twikit`."
         ) from error
     _patch_twikit_legacy_defaults()
+    _patch_twikit_client_transaction_compat()
     return twikit_module.Client(language="en-US")
+
+
+def _patch_twikit_client_transaction_compat() -> None:
+    try:
+        transaction_module = import_module("twikit.x_client_transaction.transaction")
+    except ModuleNotFoundError:
+        return
+
+    client_transaction = getattr(transaction_module, "ClientTransaction", None)
+    if client_transaction is None or getattr(client_transaction, "_snippet_transaction_patched", False):
+        return
+
+    async def patched_init(self, session, headers):
+        # Twikit 2.x가 X의 현재 프론트엔드 JS에서 KEY_BYTE index를 못 찾는 경우가 있습니다.
+        # 이전 Twikit 흐름처럼 transaction 초기화를 우회해 쿠키 기반 API 요청을 유지합니다.
+        self.home_page_response = True
+
+    def patched_generate_transaction_id(self, *args, **kwargs):
+        return base64.b64encode(os.urandom(64)).decode("ascii").rstrip("=")
+
+    client_transaction.init = patched_init
+    client_transaction.generate_transaction_id = patched_generate_transaction_id
+    client_transaction._snippet_transaction_patched = True
 
 
 def _patch_twikit_legacy_defaults() -> None:

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.collectors.x_profiles import (
     build_twikit_post_provider,
     collect_x_profile_items,
     parse_x_datetime,
+    _patch_twikit_client_transaction_compat,
 )
 from app.sources import get_x_profile
 
@@ -386,6 +388,23 @@ class XProfileCollectorTest(unittest.TestCase):
 
         self.assertEqual(user.description_urls, [])
         self.assertEqual(user.urls, [])
+
+    def test_twikit_transaction_patch_bypasses_key_byte_lookup(self):
+        try:
+            import twikit.x_client_transaction.transaction
+        except ModuleNotFoundError:
+            self.skipTest("twikit is not installed")
+
+        _patch_twikit_client_transaction_compat()
+
+        transaction = twikit.x_client_transaction.transaction.ClientTransaction()
+        asyncio.run(transaction.init(session=SimpleNamespace(), headers={}))
+
+        transaction_id = transaction.generate_transaction_id(method="GET", path="/i/api/graphql")
+
+        self.assertTrue(transaction.home_page_response)
+        self.assertIsInstance(transaction_id, str)
+        self.assertGreater(len(transaction_id), 20)
 
     def test_twikit_provider_reads_created_at_from_raw_tweet_data(self):
         class FakeTwikitClient:
