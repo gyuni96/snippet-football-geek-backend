@@ -47,6 +47,35 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[1].section, "reporter_signals")
         self.assertEqual(payload.items[1].confidence_label, "reporter_claim")
 
+    def test_builds_article_item_with_groq_summarizer_when_provided(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/liverpool-midfielder",
+            title="Liverpool monitor midfield target",
+            body="Liverpool are watching a midfielder ahead of the summer window.",
+            published_at=published_at,
+            author="Reporter",
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[article],
+            social_posts=[],
+            published_at=published_at,
+            article_summarizer=lambda item: {
+                "headline_ko": "리버풀, 중원 후보 주시",
+                "body_ko": "여름 이적시장을 앞두고 체크할 만한 흐름입니다.",
+                "confidence_label": "reported",
+            },
+        )
+
+        self.assertEqual(payload.items[0].headline_ko, "리버풀, 중원 후보 주시")
+        self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
+
 
 if __name__ == "__main__":
     unittest.main()

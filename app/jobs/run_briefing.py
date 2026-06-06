@@ -1,13 +1,16 @@
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
 from app.dedupe import dedupe_articles, dedupe_social_posts
+from app.env import load_env_file
 from app.freshness import filter_fresh_items, parse_iso_datetime
+from app.groq import DEFAULT_GROQ_MODEL, GroqClient, summarize_article_with_groq
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
@@ -31,8 +34,11 @@ def main() -> None:
     parser.add_argument("--since", dest="since_text")
     parser.add_argument("--retention-days", type=int, default=7)
     parser.add_argument("--state-file")
+    parser.add_argument("--use-groq", action="store_true")
+    parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
     args = parser.parse_args()
 
+    load_env_file()
     payload = run_pipeline(
         team_slug=args.team,
         briefing_type=args.briefing_type,
@@ -42,6 +48,9 @@ def main() -> None:
         since_text=args.since_text,
         retention_days=args.retention_days,
         state_file=Path(args.state_file) if args.state_file else None,
+        use_groq=args.use_groq,
+        groq_api_key=os.environ.get("GROQ_API_KEY"),
+        groq_model=args.groq_model,
     )
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
@@ -56,6 +65,9 @@ def run_pipeline(
     retention_days: int = 7,
     now_text: Optional[str] = None,
     state_file: Optional[Path] = None,
+    use_groq: bool = False,
+    groq_api_key: Optional[str] = None,
+    groq_model: str = DEFAULT_GROQ_MODEL,
 ):
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
     since = parse_iso_datetime(since_text)
@@ -81,6 +93,11 @@ def run_pipeline(
     relevant_social_posts = [
         post for post in dedupe_social_posts(social_posts) if score_liverpool_relevance(post) != "low"
     ]
+    article_summarizer = None
+    if use_groq:
+        if not groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is required when --use-groq is enabled.")
+        article_summarizer = build_article_summarizer(api_key=groq_api_key, model=groq_model)
 
     payload = build_briefing_payload(
         team_slug=team_slug,
@@ -88,6 +105,7 @@ def run_pipeline(
         articles=relevant_articles,
         social_posts=relevant_social_posts,
         published_at=now,
+        article_summarizer=article_summarizer,
     )
     if state_file is not None:
         save_last_success_at(state_file, now)
@@ -121,6 +139,11 @@ def collect_raw_items(
         return raw_items
 
     return sample_raw_items(team_slug)
+
+
+def build_article_summarizer(api_key: str, model: str) -> Callable[[Article], dict]:
+    client = GroqClient(api_key=api_key, model=model)
+    return lambda article: summarize_article_with_groq(article, client)
 
 
 def normalize_items(raw_items: Iterable[RawItem]) -> Tuple[List[Article], List[SocialPost]]:

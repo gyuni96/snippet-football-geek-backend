@@ -84,6 +84,16 @@ python3 -m app.jobs.run_briefing \
   --state-file .runtime/liverpool-morning.json
 ```
 
+Groq API key가 `.env`에 있으면 `--use-groq`로 기사 요약/번역을 실제 한국어 브리핑 문장으로 생성할 수 있습니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source liverpool_echo \
+  --use-groq
+```
+
 ## 테스트
 
 ```bash
