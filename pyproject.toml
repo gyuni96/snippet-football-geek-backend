@@ -1,0 +1,5 @@
+[project]
+name = "snippet-football-geek-backend"
+version = "0.1.0"
+description = "Python batch backend for Korean football team briefings."
+requires-python = ">=3.9"
