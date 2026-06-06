@@ -151,6 +151,7 @@ python3 -m app.jobs.run_briefing \
 Groq API key가 `.env`에 있으면 `--use-groq`로 기사 요약/번역을 실제 한국어 브리핑 문장으로 생성할 수 있습니다.
 기본 모델은 한국어 기사 요약 품질을 우선해 `llama-3.3-70b-versatile`을 사용합니다.
 빠른 개발 테스트가 필요하면 `--groq-model llama-3.1-8b-instant`로 바꿀 수 있습니다.
+`--use-groq`를 사용하면 기사뿐 아니라 X 게시물도 브리핑용 제목과 본문으로 재작성합니다. 기사 RSS는 가능하면 링크 본문을 추출해 RSS description보다 더 긴 맥락으로 요약하고, 실패하면 기존 RSS description으로 fallback합니다.
 
 ```bash
 python3 -m app.jobs.run_briefing \

@@ -12,7 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from app.categories import normalize_category
-from app.models import Article
+from app.models import Article, SocialPost
 
 
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -99,8 +99,56 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
         "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
         "category": normalize_category(str(summary.get("category", "etc"))),
     }
-    if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
+    result = _restore_known_proper_names(result)
+    if (
+        _contains_disallowed_script(result["headline_ko"])
+        or _contains_disallowed_script(result["body_ko"])
+        or _is_mostly_untranslated_english(result["headline_ko"])
+        or _is_mostly_untranslated_english(result["body_ko"])
+    ):
         return _fallback_article_summary(article, result)
+    return result
+
+
+def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dict[str, str]:
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a Korean football editor writing concise Liverpool fan briefings from X posts. "
+                "Return only JSON with keys headline_ko, body_ko, confidence_label, category. "
+                "Clean retweets, mentions, emojis, tracking links, and line breaks into readable context. "
+                "Do not quote the full tweet verbatim. Summarize what the post signals and who is claiming it. "
+                "Keep player, club, manager, journalist, and publication names in original Latin spelling. "
+                "Use natural Korean and avoid awkward translated names. "
+                "Do not use Hanja, Kanji, Hanzi, Kana, Thai, Cyrillic, Greek, Arabic, Hebrew, or other non-Korean and non-Latin scripts. "
+                "Never treat a repost, rumor, journalist claim, or report as official confirmation. "
+                "If it is a retweet, explain it as the source sharing or amplifying another reporter's claim. "
+                "Only use facts present in the provided post text and metadata. Ignore clues from URLs. "
+                "confidence_label must be reporter_claim unless the post clearly says it is official. "
+                "category must be exactly one of: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Source name: {post.source_name}\n"
+                f"Author handle: {post.author_handle}\n"
+                f"Post text: {post.text}\n\n"
+                "Rewrite this as one short Liverpool briefing item in Korean."
+            ),
+        },
+    ]
+    summary = client.chat_json(messages)
+    result = {
+        "headline_ko": str(summary["headline_ko"]),
+        "body_ko": str(summary["body_ko"]),
+        "confidence_label": _normalize_social_confidence_label(str(summary.get("confidence_label", "reporter_claim"))),
+        "category": normalize_category(str(summary.get("category", "etc"))),
+    }
+    result = _restore_known_proper_names(result)
+    if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
+        return _fallback_social_post_summary(post, result)
     return result
 
 
@@ -130,6 +178,11 @@ def _normalize_confidence_label(value: str) -> str:
     return value if value in allowed else "reported"
 
 
+def _normalize_social_confidence_label(value: str) -> str:
+    allowed = {"official", "reporter_claim", "rumor", "unconfirmed"}
+    return value if value in allowed else "reporter_claim"
+
+
 def _contains_disallowed_script(value: str) -> bool:
     for character in value:
         if not unicodedata.category(character).startswith("L"):
@@ -141,10 +194,82 @@ def _contains_disallowed_script(value: str) -> bool:
     return False
 
 
+def _restore_known_proper_names(summary: Dict[str, str]) -> Dict[str, str]:
+    replacements = {
+        "제임스 피어스": "James Pearce",
+        "데이비드 온스테인": "David Ornstein",
+        "데이비드 오른스틴": "David Ornstein",
+        "리오 응구모하": "Rio Ngumoha",
+        "커티스 존스": "Curtis Jones",
+        "페데리코 키에사": "Federico Chiesa",
+        "유르겐 클롭": "Jurgen Klopp",
+        "위르겐 클롭": "Jurgen Klopp",
+        "비르질 판 데이크": "Virgil van Dijk",
+        "안도니 이라올라": "Andoni Iraola",
+        "이라올라": "Andoni Iraola",
+        "아르네 슬롯": "Arne Slot",
+        "슬롯": "Arne Slot",
+        "바이에른 뮌헨": "Bayern Munich",
+        "레알 마드리드": "Real Madrid",
+        "인터 밀란": "Inter Milan",
+        "밀란": "Milan",
+        "팔리스": "Crystal Palace",
+        "레버쿠젠": "Leverkusen",
+        "리버풀 에코": "Liverpool Echo",
+    }
+    restored = dict(summary)
+    for key in ("headline_ko", "body_ko"):
+        value = restored[key]
+        for korean_name, latin_name in replacements.items():
+            value = value.replace(korean_name, latin_name)
+        restored[key] = value
+    return restored
+
+
+def _is_mostly_untranslated_english(value: str) -> bool:
+    letters = [character for character in value if unicodedata.category(character).startswith("L")]
+    if not letters:
+        return False
+    latin_count = sum(1 for character in letters if unicodedata.name(character, "").startswith("LATIN"))
+    hangul_count = sum(1 for character in letters if unicodedata.name(character, "").startswith("HANGUL"))
+    return latin_count >= 25 and hangul_count == 0
+
+
 def _fallback_article_summary(article: Article, summary: Dict[str, str]) -> Dict[str, str]:
+    subject = _article_fallback_subject(article)
     return {
-        "headline_ko": article.title,
-        "body_ko": f"{article.source_name} 보도에 따르면 {article.body}",
+        "headline_ko": f"{subject} 관련 {article.source_name} 보도",
+        "body_ko": (
+            f"{article.source_name}의 영문 원문을 바탕으로 추가 확인이 필요합니다. "
+            "원문 확인이 필요한 리버풀 관련 보도입니다."
+        ),
+        "confidence_label": summary["confidence_label"],
+        "category": summary["category"],
+    }
+
+
+def _article_fallback_subject(article: Article) -> str:
+    known_subjects = [
+        "Jurgen Klopp",
+        "Real Madrid",
+        "Federico Chiesa",
+        "Curtis Jones",
+        "Andoni Iraola",
+        "Arne Slot",
+        "Virgil van Dijk",
+        "Rio Ngumoha",
+        "Liverpool",
+    ]
+    for subject in known_subjects:
+        if subject.lower() in article.title.lower() or subject.lower() in article.body.lower():
+            return subject
+    return "Liverpool"
+
+
+def _fallback_social_post_summary(post: SocialPost, summary: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "headline_ko": f"{post.source_name} 기자 신호",
+        "body_ko": f"{post.source_name}가 X에서 리버풀 관련 소식을 공유했습니다. 원문 확인이 필요합니다.",
         "confidence_label": summary["confidence_label"],
         "category": summary["category"],
     }

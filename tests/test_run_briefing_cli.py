@@ -234,6 +234,38 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.items[0].headline_ko, "그록 헤드라인")
         self.assertEqual(payload.items[0].body_ko, "그록 요약 본문")
 
+    def test_run_pipeline_uses_groq_social_post_summarizer_when_enabled(self):
+        x_item = _sample_raw_item(
+            external_id="post-1",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at="2026-06-06T09:00:00Z",
+            source_type="x_profile",
+            source_name="James Pearce",
+            author="JamesPearceLFC",
+        )
+
+        with patch("app.jobs.run_briefing.collect_x_profile_items", return_value=[x_item]):
+            with patch("app.jobs.run_briefing.build_social_post_summarizer") as factory:
+                factory.return_value = lambda post: {
+                    "headline_ko": "Pearce, 이적 관련 기자 신호",
+                    "body_ko": "James Pearce가 리버풀 이적 관련 흐름을 전했습니다.",
+                    "confidence_label": "reporter_claim",
+                    "category": "transfer",
+                }
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["x_reporters"],
+                    use_groq=True,
+                    groq_api_key="test-key",
+                    groq_model="test-model",
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        factory.assert_called_once_with(api_key="test-key", model="test-model")
+        self.assertEqual(payload.items[0].headline_ko, "Pearce, 이적 관련 기자 신호")
+        self.assertEqual(payload.items[0].body_ko, "James Pearce가 리버풀 이적 관련 흐름을 전했습니다.")
+
     def test_run_pipeline_limits_relevant_items_before_groq_summarization(self):
         first = _sample_raw_item(
             external_id="first",

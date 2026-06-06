@@ -28,6 +28,7 @@ def build_briefing_payload(
     social_posts: Iterable[SocialPost],
     published_at: datetime,
     article_summarizer: Optional[Callable[[Article], Dict[str, str]]] = None,
+    social_post_summarizer: Optional[Callable[[SocialPost], Dict[str, str]]] = None,
 ) -> BriefingPayload:
     items: List[BriefingItem] = []
 
@@ -50,16 +51,17 @@ def build_briefing_payload(
         )
 
     for post in social_posts:
-        category = classify_social_post(post)
+        social_summary = _summarize_social_post(post, social_post_summarizer)
+        category = normalize_category(social_summary["category"])
         items.append(
             BriefingItem(
                 section="reporter_signals",
-                headline_ko=f"{post.source_name} 기자 신호",
-                body_ko=f"{post.source_name}는 X에서 '{post.text}'라고 전했습니다.",
+                headline_ko=social_summary["headline_ko"],
+                body_ko=social_summary["body_ko"],
                 category=category,
                 category_label_ko=category_label_ko(category),
                 source_count=1,
-                confidence_label="reporter_claim",
+                confidence_label=social_summary["confidence_label"],
                 source_urls=[post.url],
                 source_names=[post.source_name],
                 source_type="social_post",
@@ -104,4 +106,26 @@ def _summarize_article(
         "body_ko": summary["body_ko"],
         "confidence_label": summary.get("confidence_label", "reported"),
         "category": normalize_category(summary.get("category", classify_article(article))),
+    }
+
+
+def _summarize_social_post(
+    post: SocialPost,
+    social_post_summarizer: Optional[Callable[[SocialPost], Dict[str, str]]],
+) -> Dict[str, str]:
+    if social_post_summarizer is None:
+        category = classify_social_post(post)
+        return {
+            "headline_ko": f"{post.source_name} 기자 신호",
+            "body_ko": f"{post.source_name}는 X에서 '{post.text}'라고 전했습니다.",
+            "confidence_label": "reporter_claim",
+            "category": category,
+        }
+
+    summary = social_post_summarizer(post)
+    return {
+        "headline_ko": summary["headline_ko"],
+        "body_ko": summary["body_ko"],
+        "confidence_label": summary.get("confidence_label", "reporter_claim"),
+        "category": normalize_category(summary.get("category", classify_social_post(post))),
     }

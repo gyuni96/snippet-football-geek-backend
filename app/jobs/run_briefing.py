@@ -25,7 +25,12 @@ from app.collectors.x_profiles import (
 from app.dedupe import dedupe_articles, dedupe_social_posts
 from app.env import load_env_file
 from app.freshness import filter_fresh_items, parse_iso_datetime
-from app.groq import DEFAULT_GROQ_MODEL, GroqClient, summarize_article_with_groq
+from app.groq import (
+    DEFAULT_GROQ_MODEL,
+    GroqClient,
+    summarize_article_with_groq,
+    summarize_social_post_with_groq,
+)
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
@@ -174,10 +179,12 @@ def run_pipeline(
         limit=limit,
     )
     article_summarizer = None
+    social_post_summarizer = None
     if use_groq:
         if not groq_api_key:
             raise RuntimeError("GROQ_API_KEY is required when --use-groq is enabled.")
         article_summarizer = build_article_summarizer(api_key=groq_api_key, model=groq_model)
+        social_post_summarizer = build_social_post_summarizer(api_key=groq_api_key, model=groq_model)
 
     payload = build_briefing_payload(
         team_slug=team_slug,
@@ -186,6 +193,7 @@ def run_pipeline(
         social_posts=relevant_social_posts,
         published_at=now,
         article_summarizer=article_summarizer,
+        social_post_summarizer=social_post_summarizer,
     )
     if state_file is not None:
         save_last_success_at(state_file, now)
@@ -280,6 +288,11 @@ def build_x_post_provider(provider_name: str, storage_state_path: str, cookies_f
 def build_article_summarizer(api_key: str, model: str) -> Callable[[Article], dict]:
     client = GroqClient(api_key=api_key, model=model)
     return lambda article: summarize_article_with_groq(article, client)
+
+
+def build_social_post_summarizer(api_key: str, model: str) -> Callable[[SocialPost], dict]:
+    client = GroqClient(api_key=api_key, model=model)
+    return lambda post: summarize_social_post_with_groq(post, client)
 
 
 def resolve_since_text(

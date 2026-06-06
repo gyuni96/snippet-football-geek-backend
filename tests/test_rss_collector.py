@@ -63,6 +63,33 @@ class RssCollectorTest(unittest.TestCase):
         self.assertEqual(fetched_urls, ["https://example.com/rss"])
         self.assertEqual(len(items), 2)
 
+    def test_collect_rss_items_uses_article_body_when_extractor_succeeds(self):
+        fetched_urls = []
+
+        def fake_fetcher(url):
+            fetched_urls.append(url)
+            return SAMPLE_RSS.encode("utf-8")
+
+        def fake_article_extractor(url):
+            if "alexis-mac-allister" in url:
+                return "Full article paragraph one. Full article paragraph two with more Liverpool context."
+            return ""
+
+        items = collect_rss_items(
+            feed_url="https://example.com/rss",
+            team_slug="liverpool",
+            source_name="Sample Liverpool Feed",
+            fetcher=fake_fetcher,
+            article_body_extractor=fake_article_extractor,
+        )
+
+        self.assertEqual(fetched_urls, ["https://example.com/rss"])
+        self.assertEqual(
+            items[0].text,
+            "Full article paragraph one. Full article paragraph two with more Liverpool context.",
+        )
+        self.assertEqual(items[1].text, "General Premier League fixture news.")
+
 
 if __name__ == "__main__":
     unittest.main()

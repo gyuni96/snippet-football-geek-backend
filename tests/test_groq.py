@@ -3,8 +3,8 @@ import unittest
 from urllib.error import HTTPError
 from io import BytesIO
 
-from app.groq import GroqAPIError, GroqClient, summarize_article_with_groq
-from app.models import Article
+from app.groq import GroqAPIError, GroqClient, summarize_article_with_groq, summarize_social_post_with_groq
+from app.models import Article, SocialPost
 from datetime import datetime, timezone
 
 
@@ -90,11 +90,96 @@ class GroqTest(unittest.TestCase):
 
         summary = summarize_article_with_groq(article, client)
 
-        self.assertEqual(summary["headline_ko"], "Jurgen Klopp responds to Real Madrid links")
-        self.assertIn("Jurgen Klopp was asked again", summary["body_ko"])
+        self.assertEqual(summary["headline_ko"], "Jurgen Klopp 관련 Liverpool Echo 보도")
+        self.assertIn("원문 확인이 필요한 리버풀 관련 보도입니다", summary["body_ko"])
         self.assertEqual(summary["confidence_label"], "reported")
         self.assertEqual(summary["category"], "rumor")
         self.assertIn("Thai", client.messages[0]["content"])
+
+    def test_summarize_article_with_groq_falls_back_when_summary_is_mostly_english(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Jurgen Klopp responds to Real Madrid links",
+            body="Jurgen Klopp was asked again about links with Real Madrid.",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "Jurgen Klopp comments about coaching return speak volumes",
+                "body_ko": "Liverpool Echo reports that Jurgen Klopp has had to field reports linking him to Real Madrid.",
+                "confidence_label": "reported",
+                "category": "rumor",
+            }
+        )
+
+        summary = summarize_article_with_groq(article, client)
+
+        self.assertEqual(summary["headline_ko"], "Jurgen Klopp 관련 Liverpool Echo 보도")
+        self.assertIn("영문 원문을 바탕으로 추가 확인이 필요합니다", summary["body_ko"])
+
+    def test_summarize_social_post_with_groq_uses_editorial_prompt(self):
+        post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="James Pearce",
+            external_post_id="post-1",
+            author_handle="JamesPearceLFC",
+            text="RT @David_Ornstein: Bayern Munich exploring move to sign Rio Ngumoha.",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "Bayern, Rio Ngumoha 관심 보도 확산",
+                "body_ko": "James Pearce가 David Ornstein의 보도를 공유하며 Bayern Munich의 Rio Ngumoha 관심을 전했습니다.",
+                "confidence_label": "reporter_claim",
+                "category": "transfer",
+            }
+        )
+
+        summary = summarize_social_post_with_groq(post, client)
+
+        self.assertEqual(summary["headline_ko"], "Bayern, Rio Ngumoha 관심 보도 확산")
+        self.assertEqual(summary["confidence_label"], "reporter_claim")
+        self.assertEqual(summary["category"], "transfer")
+        self.assertIn("Clean retweets", client.messages[0]["content"])
+        self.assertIn("Do not quote the full tweet verbatim", client.messages[0]["content"])
+        self.assertIn("RT @David_Ornstein", client.messages[1]["content"])
+
+    def test_summarize_social_post_with_groq_restores_known_proper_names(self):
+        post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="James Pearce",
+            external_post_id="post-1",
+            author_handle="JamesPearceLFC",
+            text="James Pearce shared David Ornstein's report about Rio Ngumoha.",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "제임스 피어스, 리오 응구모하 관련 보도 공유",
+                "body_ko": "제임스 피어스가 데이비드 온스테인의 보도를 공유하며 리오 응구모하 관련 흐름을 전했습니다. 슬롯과 이라올라, 팔리스, 레버쿠젠도 언급됐습니다.",
+                "confidence_label": "reporter_claim",
+                "category": "transfer",
+            }
+        )
+
+        summary = summarize_social_post_with_groq(post, client)
+
+        self.assertIn("James Pearce", summary["headline_ko"])
+        self.assertIn("Rio Ngumoha", summary["headline_ko"])
+        self.assertIn("James Pearce", summary["body_ko"])
+        self.assertIn("David Ornstein", summary["body_ko"])
+        self.assertIn("Rio Ngumoha", summary["body_ko"])
+        self.assertIn("Arne Slot", summary["body_ko"])
+        self.assertIn("Andoni Iraola", summary["body_ko"])
+        self.assertIn("Crystal Palace", summary["body_ko"])
+        self.assertIn("Leverkusen", summary["body_ko"])
 
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}

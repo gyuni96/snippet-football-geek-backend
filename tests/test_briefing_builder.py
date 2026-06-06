@@ -55,6 +55,38 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[1].category, "transfer")
         self.assertEqual(payload.items[1].category_label_ko, "이적")
 
+    def test_builds_social_post_item_with_summarizer_when_provided(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        social_post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="James Pearce",
+            external_post_id="post-1",
+            author_handle="JamesPearceLFC",
+            text="RT @David_Ornstein: Bayern Munich exploring move to sign Rio Ngumoha.",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at=published_at,
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[],
+            social_posts=[social_post],
+            published_at=published_at,
+            social_post_summarizer=lambda post: {
+                "headline_ko": "Bayern, Rio Ngumoha 관심 보도 확산",
+                "body_ko": "James Pearce가 David Ornstein의 보도를 공유하며 Bayern Munich의 Rio Ngumoha 관심을 전했습니다.",
+                "confidence_label": "reporter_claim",
+                "category": "transfer",
+            },
+        )
+
+        self.assertEqual(payload.items[0].headline_ko, "Bayern, Rio Ngumoha 관심 보도 확산")
+        self.assertIn("David Ornstein", payload.items[0].body_ko)
+        self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
+        self.assertEqual(payload.items[0].category, "transfer")
+
     def test_builds_article_item_with_groq_summarizer_when_provided(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
         article = Article(
