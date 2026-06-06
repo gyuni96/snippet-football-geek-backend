@@ -6,9 +6,11 @@ from typing import Iterable, List, Optional, Tuple
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
 from app.dedupe import dedupe_articles, dedupe_social_posts
+from app.freshness import filter_fresh_items, parse_iso_datetime
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
+from app.sources import iter_collectable_sources
 
 
 def main() -> None:
@@ -17,6 +19,15 @@ def main() -> None:
     parser.add_argument("--type", default="morning", dest="briefing_type")
     parser.add_argument("--rss-url")
     parser.add_argument("--rss-source-name", default="RSS Feed")
+    parser.add_argument(
+        "--source",
+        action="append",
+        dest="source_keys",
+        default=[],
+        help="Configured source key to collect. Use multiple times, or use 'all'.",
+    )
+    parser.add_argument("--since", dest="since_text")
+    parser.add_argument("--retention-days", type=int, default=7)
     args = parser.parse_args()
 
     payload = run_pipeline(
@@ -24,6 +35,9 @@ def main() -> None:
         briefing_type=args.briefing_type,
         rss_url=args.rss_url,
         rss_source_name=args.rss_source_name,
+        source_keys=args.source_keys or None,
+        since_text=args.since_text,
+        retention_days=args.retention_days,
     )
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
@@ -33,11 +47,24 @@ def run_pipeline(
     briefing_type: str,
     rss_url: Optional[str] = None,
     rss_source_name: str = "RSS Feed",
+    source_keys: Optional[List[str]] = None,
+    since_text: Optional[str] = None,
+    retention_days: int = 7,
+    now_text: Optional[str] = None,
 ):
+    now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
+    since = parse_iso_datetime(since_text)
     raw_items = collect_raw_items(
         team_slug=team_slug,
         rss_url=rss_url,
         rss_source_name=rss_source_name,
+        source_keys=source_keys,
+    )
+    raw_items = filter_fresh_items(
+        raw_items,
+        since=since,
+        retention_days=retention_days,
+        now=now,
     )
     articles, social_posts = normalize_items(raw_items)
     relevant_articles = [
@@ -52,7 +79,7 @@ def run_pipeline(
         briefing_type=briefing_type,
         articles=relevant_articles,
         social_posts=relevant_social_posts,
-        published_at=datetime.now(timezone.utc),
+        published_at=now,
     )
 
 
@@ -60,6 +87,7 @@ def collect_raw_items(
     team_slug: str,
     rss_url: Optional[str],
     rss_source_name: str,
+    source_keys: Optional[List[str]] = None,
 ) -> List[RawItem]:
     if rss_url:
         return collect_rss_items(
@@ -67,6 +95,18 @@ def collect_raw_items(
             team_slug=team_slug,
             source_name=rss_source_name,
         )
+
+    if source_keys:
+        raw_items: List[RawItem] = []
+        for source in iter_collectable_sources(source_keys):
+            raw_items.extend(
+                collect_rss_items(
+                    feed_url=source.rss_url or "",
+                    team_slug=team_slug,
+                    source_name=source.name,
+                )
+            )
+        return raw_items
 
     return sample_raw_items(team_slug)
 

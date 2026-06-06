@@ -51,21 +51,57 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_urls, ["https://example.com/liverpool-story"])
 
+    def test_run_pipeline_collects_configured_sources_and_filters_since(self):
+        fresh_item = _sample_raw_item(
+            external_id="fresh",
+            url="https://example.com/fresh-liverpool-story",
+            published_at="2026-06-06T09:00:00Z",
+        )
+        old_item = _sample_raw_item(
+            external_id="old",
+            url="https://example.com/old-liverpool-story",
+            published_at="2026-06-05T09:00:00Z",
+        )
 
-def _sample_raw_item():
+        def fake_collect_rss_items(feed_url, team_slug, source_name):
+            if "liverpoolecho" in feed_url:
+                return [fresh_item, old_item]
+            return []
+
+        with patch("app.jobs.run_briefing.collect_rss_items", side_effect=fake_collect_rss_items):
+            payload = run_pipeline(
+                team_slug="liverpool",
+                briefing_type="morning",
+                source_keys=["liverpool_echo", "official_website"],
+                since_text="2026-06-06T08:00:00Z",
+                retention_days=7,
+                now_text="2026-06-06T12:00:00Z",
+            )
+
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
+
+
+def _sample_raw_item(
+    external_id="rss-1",
+    url="https://example.com/liverpool-story",
+    published_at="2026-06-06T08:00:00Z",
+):
     from datetime import datetime, timezone
 
     from app.models import RawItem
+
+    parsed = datetime.fromisoformat(published_at.replace("Z", "+00:00")).astimezone(timezone.utc)
 
     return RawItem(
         team_slug="liverpool",
         source_type="rss",
         source_name="Example RSS",
-        external_id="rss-1",
-        url="https://example.com/liverpool-story",
+        external_id=external_id,
+        url=url,
         title="Liverpool transfer update",
         text="Liverpool are monitoring a transfer target.",
-        published_at=datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc),
+        published_at=parsed,
     )
 
 

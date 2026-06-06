@@ -47,6 +47,32 @@ python3 -m app.jobs.run_briefing \
   --rss-source-name "Example RSS"
 ```
 
+임시 Liverpool 소스 설정을 사용할 수도 있습니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source all
+```
+
+현재 설정된 소스:
+
+- `liverpool_echo`: Liverpool Echo - Liverpool FC RSS
+- `official_website`: Liverpool FC Official Website, 현재 RSS 없음
+- `bbc_sport`: BBC Sport football 전체 RSS, 리버풀 관련성 필터로 선별
+
+새로운 소식만 확인하려면 `--since`를 지정합니다. 데이터 보관 정책은 기본 7일 기준으로 보고, 그보다 오래된 항목은 콘솔 payload 생성 전에 제외합니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source all \
+  --since "2026-06-06T08:00:00Z" \
+  --retention-days 7
+```
+
 ## 테스트
 
 ```bash
