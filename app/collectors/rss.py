@@ -1,8 +1,8 @@
-"""RSS collection helpers.
+"""RSS 수집을 담당하는 도우미 모듈입니다.
 
-This module downloads an RSS feed and converts each `<item>` into `RawItem`.
-It intentionally stops at raw collection: filtering, deduplication, and
-summarization happen later in the pipeline.
+RSS 피드를 내려받아 각 `<item>`을 `RawItem`으로 변환합니다. 이 모듈은
+의도적으로 원본 수집까지만 담당하며, 필터링, 중복 제거, 요약은 이후
+파이프라인 단계에서 처리합니다.
 """
 
 from datetime import datetime, timezone

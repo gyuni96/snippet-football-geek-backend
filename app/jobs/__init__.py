@@ -1,1 +1,1 @@
-"""Runnable jobs and CLI entrypoints."""
+"""실행 가능한 배치 작업과 CLI 진입점을 모아둔 패키지입니다."""

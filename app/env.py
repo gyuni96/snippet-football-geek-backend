@@ -1,8 +1,8 @@
-"""Minimal `.env` loader for local development.
+"""로컬 개발을 위한 최소한의 `.env` 로더입니다.
 
-The project avoids adding dependencies at this stage, so this module reads
-simple KEY=VALUE lines from `.env` and fills missing process environment
-variables. Existing environment values are not overwritten.
+현재 단계에서는 의존성을 늘리지 않기 위해 단순한 KEY=VALUE 형식의 `.env`
+파일만 읽습니다. 이미 설정된 환경 변수는 덮어쓰지 않고, 비어 있는 값만
+채웁니다.
 """
 
 import os

@@ -1,1 +1,1 @@
-"""Collector adapters for external content sources."""
+"""외부 콘텐츠 소스를 수집하는 어댑터들을 모아둔 패키지입니다."""

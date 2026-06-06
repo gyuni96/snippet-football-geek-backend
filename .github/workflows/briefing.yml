@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       team:
-        description: Team slug
+        description: 팀 slug
         required: true
         default: liverpool
       briefing_type:
-        description: Briefing type
+        description: 브리핑 타입
         required: true
         default: morning
         type: choice
@@ -19,24 +19,24 @@ on:
           - transfer_extra
           - matchday
       source:
-        description: Configured source key
+        description: 설정된 수집 소스 key
         required: true
         default: liverpool_echo
       limit:
-        description: Max briefing items to process
+        description: 처리할 최대 브리핑 항목 수
         required: true
         default: "3"
       use_groq:
-        description: Generate Korean summaries with Groq
+        description: Groq로 한국어 요약 생성
         required: true
         default: true
         type: boolean
   schedule:
-    # 05:00 KST early briefing
+    # 한국 시간 05:00 새벽/아침 브리핑
     - cron: "0 20 * * *"
-    # 16:00 KST afternoon briefing
+    # 한국 시간 16:00 오후 브리핑
     - cron: "0 7 * * *"
-    # 22:00 KST night briefing
+    # 한국 시간 22:00 밤 브리핑
     - cron: "0 13 * * *"
 
 jobs:

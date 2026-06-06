@@ -1,8 +1,8 @@
-"""Small deduplication rules for collected content.
+"""수집된 콘텐츠의 기본 중복 제거 규칙을 담당합니다.
 
-The first MVP pass removes obvious duplicates only: same article URL or same X
-post id. More advanced story clustering can be added later without changing the
-collector layer.
+첫 MVP 단계에서는 같은 기사 URL 또는 같은 X 게시물 ID처럼 명확한 중복만
+제거합니다. 이후 더 정교한 기사 묶음 처리는 수집 계층을 바꾸지 않고
+별도 단계로 확장할 수 있습니다.
 """
 
 from typing import Iterable, List, Set

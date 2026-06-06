@@ -1,8 +1,8 @@
-"""Liverpool relevance scoring.
+"""리버풀 관련성 점수를 판단합니다.
 
-This module decides whether a normalized article or social post is worth
-including before expensive steps like Groq summarization. The MVP uses simple
-keyword rules and returns broad labels such as `high` or `low`.
+정규화된 기사나 소셜 게시물이 Groq 요약처럼 비용이 드는 단계에 들어갈
+가치가 있는지 먼저 판단합니다. MVP에서는 단순 키워드 규칙으로 `high`,
+`low` 같은 넓은 라벨을 반환합니다.
 """
 
 from typing import Union

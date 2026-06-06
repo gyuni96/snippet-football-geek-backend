@@ -1,8 +1,8 @@
-"""Freshness and retention filtering.
+"""최신성 및 보관 기간 필터링을 담당합니다.
 
-The service is meant to collect only newly published team news and keep a short
-window of data. This module filters out items published before the last
-successful run or outside the retention period.
+이 서비스는 새로 올라온 팀 소식만 수집하고 짧은 기간의 데이터만 보관하는
+방향으로 동작합니다. 이 모듈은 마지막 성공 실행 이전에 발행된 항목이나
+보관 기간을 벗어난 항목을 걸러냅니다.
 """
 
 from datetime import datetime, timedelta, timezone

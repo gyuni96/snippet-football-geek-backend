@@ -1,8 +1,8 @@
-"""CLI entrypoint for running the briefing pipeline.
+"""브리핑 파이프라인을 실행하는 CLI 진입점입니다.
 
-This is the current MVP orchestrator. It collects raw items, applies freshness
-and relevance filters, optionally summarizes articles with Groq, and prints the
-Supabase-ready briefing JSON to stdout instead of writing to a database.
+현재 MVP의 전체 실행 흐름을 조율합니다. 원본 항목을 수집하고, 최신성 및
+관련성 필터를 적용하고, 필요하면 Groq로 기사를 요약한 뒤, 데이터베이스에
+저장하는 대신 Supabase 저장에 맞춘 브리핑 JSON을 콘솔에 출력합니다.
 """
 
 import argparse
@@ -26,7 +26,7 @@ from app.state import load_last_success_at, save_last_success_at
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build a console briefing payload.")
+    parser = argparse.ArgumentParser(description="콘솔에 출력할 브리핑 payload를 생성합니다.")
     parser.add_argument("--team", default="liverpool")
     parser.add_argument("--type", default="morning", dest="briefing_type")
     parser.add_argument("--rss-url")
@@ -36,14 +36,14 @@ def main() -> None:
         action="append",
         dest="source_keys",
         default=[],
-        help="Configured source key to collect. Use multiple times, or use 'all'.",
+        help="수집할 설정 소스 key입니다. 여러 번 사용할 수 있고, 전체 수집은 'all'을 사용합니다.",
     )
     parser.add_argument("--since", dest="since_text")
     parser.add_argument("--retention-days", type=int, default=7)
     parser.add_argument("--state-file")
     parser.add_argument("--use-groq", action="store_true")
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
-    parser.add_argument("--limit", type=int, help="Limit briefing items after filtering. Useful for Groq tests.")
+    parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
     args = parser.parse_args()
 
     load_env_file()

@@ -1,8 +1,8 @@
-"""Normalize raw collected items into typed internal records.
+"""수집 원본 데이터를 내부에서 쓰는 타입 있는 레코드로 정규화합니다.
 
-Collectors return `RawItem` because every source has a different shape. This
-module converts those raw records into either `Article` or `SocialPost`, which
-the rest of the pipeline can process consistently.
+수집기는 소스마다 형태가 다르기 때문에 `RawItem`을 반환합니다. 이 모듈은
+원본 항목을 `Article` 또는 `SocialPost`로 변환해 이후 파이프라인이
+일관된 형태로 처리할 수 있게 합니다.
 """
 
 from typing import Union

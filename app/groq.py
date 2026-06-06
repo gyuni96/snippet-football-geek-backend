@@ -1,8 +1,8 @@
-"""Groq API client and article summarization prompts.
+"""Groq API 클라이언트와 기사 요약 프롬프트를 담당합니다.
 
-This module wraps Groq's OpenAI-compatible chat completions endpoint and turns
-an `Article` into a Korean briefing summary. The CLI can enable this with
-`--use-groq`; otherwise the pipeline keeps using local template text.
+Groq의 OpenAI 호환 chat completions endpoint를 감싸고, `Article`을 한국어
+브리핑 요약으로 변환합니다. CLI에서 `--use-groq`로 활성화할 수 있으며,
+비활성화하면 파이프라인은 로컬 템플릿 문구를 사용합니다.
 """
 
 import json

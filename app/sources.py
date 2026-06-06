@@ -1,8 +1,8 @@
-"""Temporary Liverpool source configuration.
+"""임시 리버풀 수집 소스 설정입니다.
 
-These source definitions let the CLI collect configured feeds by key, such as
-`liverpool_echo`. Sources without RSS URLs can stay documented here while being
-skipped by the current RSS-only collector.
+CLI가 `liverpool_echo`처럼 설정된 key로 피드를 수집할 수 있게 해줍니다.
+RSS URL이 없는 소스도 이곳에 문서화해두고, 현재 RSS 전용 수집기에서는
+자동으로 건너뜁니다.
 """
 
 from dataclasses import dataclass

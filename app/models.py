@@ -1,9 +1,8 @@
-"""Shared data shapes used throughout the briefing pipeline.
+"""브리핑 파이프라인 전체에서 함께 사용하는 데이터 형태를 정의합니다.
 
-The backend moves data through a few stages: raw collected data, normalized
-article/social records, and final briefing output. These dataclasses define
-those shapes so every module passes around predictable objects instead of loose
-dictionaries.
+백엔드는 수집 원본 데이터, 정규화된 기사/소셜 데이터, 최종 브리핑 출력의
+단계를 거칩니다. 이 dataclass들은 각 단계의 형태를 고정해, 모듈 간에
+느슨한 dictionary 대신 예측 가능한 객체를 주고받게 해줍니다.
 """
 
 from dataclasses import dataclass, field

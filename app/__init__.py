@@ -1,1 +1,1 @@
-"""Snippet Football Geek backend package."""
+"""Snippet Football Geek 백엔드 패키지입니다."""

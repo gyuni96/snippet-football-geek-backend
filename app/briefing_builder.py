@@ -1,8 +1,8 @@
-"""Build the final briefing payload shown in console output.
+"""콘솔에 출력할 최종 브리핑 payload를 만듭니다.
 
-The builder turns filtered articles and social posts into `BriefingPayload`.
-It can use local template text or an injected article summarizer, such as the
-Groq summarizer, while keeping the output shape the same.
+필터링된 기사와 소셜 게시물을 `BriefingPayload`로 변환합니다. 출력 형태는
+유지하면서 로컬 템플릿 문구를 쓰거나, Groq 요약기처럼 주입된 기사 요약기를
+사용할 수 있습니다.
 """
 
 from datetime import datetime
