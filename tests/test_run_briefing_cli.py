@@ -188,6 +188,21 @@ class RunBriefingCliTest(unittest.TestCase):
             ],
         )
 
+    def test_cli_supports_save_supabase_option(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "app.jobs.run_briefing",
+                "--help",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn("--save-supabase", completed.stdout)
+
 
 def _sample_raw_item(
     external_id="rss-1",

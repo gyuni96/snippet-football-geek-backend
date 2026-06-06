@@ -69,6 +69,33 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(summary["confidence_label"], "reported")
         self.assertEqual(summary["category"], "etc")
 
+    def test_summarize_article_with_groq_falls_back_when_foreign_script_leaks(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Jurgen Klopp responds to Real Madrid links",
+            body="Jurgen Klopp was asked again about links with Real Madrid.",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "유르겐 คล롭의 레알 마드리드 링크",
+                "body_ko": "유르겐 คล롭이 레알 마드리드와의 링크에 대해 답했습니다.",
+                "confidence_label": "reported",
+                "category": "rumor",
+            }
+        )
+
+        summary = summarize_article_with_groq(article, client)
+
+        self.assertEqual(summary["headline_ko"], "Jurgen Klopp responds to Real Madrid links")
+        self.assertIn("Jurgen Klopp was asked again", summary["body_ko"])
+        self.assertEqual(summary["confidence_label"], "reported")
+        self.assertEqual(summary["category"], "rumor")
+        self.assertIn("Thai", client.messages[0]["content"])
+
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}
 

@@ -45,6 +45,8 @@ jobs:
     timeout-minutes: 10
     env:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -88,6 +90,7 @@ jobs:
             --type "$BRIEFING_TYPE"
             --source "$SOURCE"
             --limit "$LIMIT"
+            --save-supabase
           )
 
           if [ "$USE_GROQ" = "true" ]; then

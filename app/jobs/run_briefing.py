@@ -1,8 +1,8 @@
 """브리핑 파이프라인을 실행하는 CLI 진입점입니다.
 
 현재 MVP의 전체 실행 흐름을 조율합니다. 원본 항목을 수집하고, 최신성 및
-관련성 필터를 적용하고, 필요하면 Groq로 기사를 요약한 뒤, 데이터베이스에
-저장하는 대신 Supabase 저장에 맞춘 브리핑 JSON을 콘솔에 출력합니다.
+관련성 필터를 적용하고, 필요하면 Groq로 기사를 요약한 뒤, 브리핑 JSON을
+콘솔에 출력하거나 Supabase에 저장합니다.
 """
 
 import argparse
@@ -23,6 +23,7 @@ from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
 from app.sources import iter_collectable_sources
 from app.state import load_last_success_at, save_last_success_at
+from app.supabase import SupabaseClient, save_briefing_payload
 
 
 def main() -> None:
@@ -44,6 +45,7 @@ def main() -> None:
     parser.add_argument("--use-groq", action="store_true")
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
+    parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
     args = parser.parse_args()
 
     load_env_file()
@@ -61,6 +63,8 @@ def main() -> None:
         groq_model=args.groq_model,
         limit=args.limit,
     )
+    if args.save_supabase:
+        save_payload_to_supabase(payload)
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
 
@@ -175,6 +179,16 @@ def collect_raw_items(
 def build_article_summarizer(api_key: str, model: str) -> Callable[[Article], dict]:
     client = GroqClient(api_key=api_key, model=model)
     return lambda article: summarize_article_with_groq(article, client)
+
+
+def save_payload_to_supabase(payload) -> str:
+    base_url = os.environ.get("SUPABASE_URL")
+    service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not base_url or not service_role_key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required when --save-supabase is enabled.")
+
+    client = SupabaseClient(base_url=base_url, service_role_key=service_role_key)
+    return save_briefing_payload(payload, client)
 
 
 def normalize_items(raw_items: Iterable[RawItem]) -> Tuple[List[Article], List[SocialPost]]:

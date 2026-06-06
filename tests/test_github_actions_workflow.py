@@ -21,7 +21,9 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertIn("--limit", content)
         self.assertIn("--use-groq", content)
         self.assertIn("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}", content)
-        self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", content)
+        self.assertIn("SUPABASE_URL: ${{ secrets.SUPABASE_URL }}", content)
+        self.assertIn("SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}", content)
+        self.assertIn("--save-supabase", content)
 
 
 if __name__ == "__main__":

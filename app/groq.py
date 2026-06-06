@@ -6,6 +6,7 @@ Groq의 OpenAI 호환 chat completions endpoint를 감싸고, `Article`을 한�
 """
 
 import json
+import unicodedata
 from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -71,6 +72,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
                 "Keep names like Federico Chiesa, Andoni Iraola, Arne Slot, Liverpool, Bournemouth, and Liverpool Echo in English. "
                 "Never output broken mixed-script names or Chinese/Japanese characters for European football names. "
                 "Do not use Hanja, Kanji, Hanzi, Kana, or any Chinese/Japanese characters in headline_ko or body_ko. "
+                "Do not use Thai, Cyrillic, Greek, Arabic, Hebrew, Devanagari, or any other non-Korean and non-Latin script. "
                 "Use a fan-friendly but careful tone. Do not present rumors as confirmed. "
                 "Only use facts present in the provided title and body. Ignore clues from URLs. "
                 "Do not add clubs, players, fees, injuries, quotes, or transfer status that are not in the title or body. "
@@ -91,12 +93,15 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
         },
     ]
     summary = client.chat_json(messages)
-    return {
+    result = {
         "headline_ko": str(summary["headline_ko"]),
         "body_ko": str(summary["body_ko"]),
         "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
         "category": normalize_category(str(summary.get("category", "etc"))),
     }
+    if _contains_disallowed_script(result["headline_ko"]) or _contains_disallowed_script(result["body_ko"]):
+        return _fallback_article_summary(article, result)
+    return result
 
 
 def _http_post_json(url: str, headers: Dict[str, str], body: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,3 +128,23 @@ def _format_http_error(error: HTTPError) -> str:
 def _normalize_confidence_label(value: str) -> str:
     allowed = {"official", "reported", "rumor", "unconfirmed"}
     return value if value in allowed else "reported"
+
+
+def _contains_disallowed_script(value: str) -> bool:
+    for character in value:
+        if not unicodedata.category(character).startswith("L"):
+            continue
+        name = unicodedata.name(character, "")
+        if name.startswith("LATIN") or name.startswith("HANGUL"):
+            continue
+        return True
+    return False
+
+
+def _fallback_article_summary(article: Article, summary: Dict[str, str]) -> Dict[str, str]:
+    return {
+        "headline_ko": article.title,
+        "body_ko": f"{article.source_name} 보도에 따르면 {article.body}",
+        "confidence_label": summary["confidence_label"],
+        "category": summary["category"],
+    }
