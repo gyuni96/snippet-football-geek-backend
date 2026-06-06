@@ -170,6 +170,10 @@ def limit_items(
         return articles, social_posts
     if limit <= 0:
         return [], []
+    if articles and social_posts and limit > 1:
+        limited_social_posts = social_posts[:1]
+        limited_articles = articles[: limit - len(limited_social_posts)]
+        return limited_articles, limited_social_posts
 
     limited_articles = articles[:limit]
     remaining = limit - len(limited_articles)
@@ -196,13 +200,19 @@ def collect_raw_items(
     if source_keys:
         raw_items: List[RawItem] = []
         for source in iter_collectable_sources(source_keys):
-            raw_items.extend(
-                collect_rss_items(
-                    feed_url=source.rss_url or "",
-                    team_slug=team_slug,
-                    source_name=source.name,
+            try:
+                raw_items.extend(
+                    collect_rss_items(
+                        feed_url=source.rss_url or "",
+                        team_slug=team_slug,
+                        source_name=source.name,
+                    )
                 )
-            )
+            except Exception as error:
+                print(
+                    f"RSS collection skipped for {source.key}: {error}",
+                    file=sys.stderr,
+                )
         x_post_provider = build_x_post_provider(
             provider_name=x_provider,
             storage_state_path=x_storage_state,

@@ -133,6 +133,30 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertIn("X collection skipped", stderr.getvalue())
         self.assertIn("X login blocked", stderr.getvalue())
 
+    def test_run_pipeline_keeps_other_sources_when_one_rss_source_fails(self):
+        rss_item = _sample_raw_item()
+        stderr = StringIO()
+
+        def fake_collect_rss_items(feed_url, team_slug, source_name):
+            if "liverpoolecho" in feed_url:
+                return [rss_item]
+            raise RuntimeError("RSS certificate failed")
+
+        with patch("app.jobs.run_briefing.collect_rss_items", side_effect=fake_collect_rss_items):
+            with patch("sys.stderr", stderr):
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo", "bbc_sport"],
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_urls, ["https://example.com/liverpool-story"])
+        self.assertIn("RSS collection skipped", stderr.getvalue())
+        self.assertIn("RSS certificate failed", stderr.getvalue())
+
     def test_cli_supports_x_provider_option(self):
         completed = subprocess.run(
             [
@@ -255,6 +279,38 @@ class RunBriefingCliTest(unittest.TestCase):
                 "https://example.com/second-liverpool-story",
             ],
         )
+
+    def test_run_pipeline_limit_keeps_social_post_when_articles_are_available(self):
+        article_items = [
+            _sample_raw_item(
+                external_id=f"article-{index}",
+                url=f"https://example.com/article-{index}",
+            )
+            for index in range(5)
+        ]
+        x_item = _sample_raw_item(
+            external_id="post-1",
+            url="https://x.com/JamesPearceLFC/status/post-1",
+            published_at="2026-06-06T09:00:00Z",
+            source_type="x_profile",
+            source_name="James Pearce",
+            author="JamesPearceLFC",
+        )
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=article_items):
+            with patch("app.jobs.run_briefing.collect_x_profile_items", return_value=[x_item]):
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo", "x_reporters"],
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                    limit=5,
+                )
+
+        self.assertEqual(len(payload.items), 5)
+        self.assertEqual(payload.items[-1].source_type, "social_post")
+        self.assertEqual(payload.items[-1].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
 
     def test_cli_supports_save_supabase_option(self):
         completed = subprocess.run(
