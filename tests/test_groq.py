@@ -37,6 +37,28 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(summary["confidence_label"], "reported")
         self.assertIn("Liverpool monitor midfield target", client.messages[1]["content"])
 
+    def test_summarize_article_with_groq_normalizes_unknown_confidence_label(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Liverpool monitor midfield target",
+            body="Liverpool are watching a midfielder before the summer transfer window.",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "리버풀, 중원 보강 후보 주시",
+                "body_ko": "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
+                "confidence_label": "중",
+            }
+        )
+
+        summary = summarize_article_with_groq(article, client)
+
+        self.assertEqual(summary["confidence_label"], "reported")
+
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}
 
@@ -67,6 +89,7 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(content["headline_ko"], "헤드라인")
         self.assertEqual(captured["url"], "https://api.groq.com/openai/v1/chat/completions")
         self.assertEqual(captured["headers"]["Authorization"], "Bearer test-key")
+        self.assertEqual(captured["headers"]["User-Agent"], "SnippetFootballGeekBot/0.1")
         self.assertEqual(captured["body"]["model"], "test-model")
 
     def test_groq_client_converts_http_error_to_safe_error_message(self):

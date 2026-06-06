@@ -35,6 +35,7 @@ class GroqClient:
                 {
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
+                    "User-Agent": "SnippetFootballGeekBot/0.1",
                 },
                 {
                     "model": self.model,
@@ -56,7 +57,9 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
             "content": (
                 "You are a Korean football editor writing for Liverpool fans. "
                 "Return only JSON with keys headline_ko, body_ko, confidence_label. "
-                "Use a fan-friendly but careful tone. Do not present rumors as confirmed."
+                "Use natural Korean with no awkward English verbs. Keep player, club, and journalist names as proper nouns. "
+                "Use a fan-friendly but careful tone. Do not present rumors as confirmed. "
+                "confidence_label must be one of: official, reported, rumor, unconfirmed."
             ),
         },
         {
@@ -73,7 +76,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
     return {
         "headline_ko": str(summary["headline_ko"]),
         "body_ko": str(summary["body_ko"]),
-        "confidence_label": str(summary.get("confidence_label", "reported")),
+        "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
     }
 
 
@@ -96,3 +99,8 @@ def _format_http_error(error: HTTPError) -> str:
     except json.JSONDecodeError:
         message = body
     return f"Groq API request failed with status {error.code}: {message}"
+
+
+def _normalize_confidence_label(value: str) -> str:
+    allowed = {"official", "reported", "rumor", "unconfirmed"}
+    return value if value in allowed else "reported"
