@@ -12,8 +12,14 @@ from typing import Iterable, List, Set
 
 from app.models import Article
 
+try:
+    from rapidfuzz import fuzz
+except ImportError:  # pragma: no cover - 로컬 의존성 설치 전에도 테스트 가능하게 둡니다.
+    fuzz = None
+
 
 SIMILARITY_THRESHOLD = 0.72
+RAPIDFUZZ_SIMILARITY_THRESHOLD = 78
 KEYWORD_OVERLAP_THRESHOLD = 0.5
 STOP_WORDS = {
     "and",
@@ -58,10 +64,14 @@ def _is_similar_article(left: Article, right: Article) -> bool:
     if not left_title or not right_title:
         return False
 
-    title_similarity = SequenceMatcher(None, left_title, right_title).ratio()
+    title_similarity = _title_similarity(left_title, right_title)
     left_keywords = _keywords(left_title)
     right_keywords = _keywords(right_title)
     if title_similarity >= SIMILARITY_THRESHOLD and _has_shared_specific_keyword(left_keywords, right_keywords):
+        return True
+
+    fuzzy_similarity = _token_set_similarity(left_title, right_title)
+    if fuzzy_similarity >= RAPIDFUZZ_SIMILARITY_THRESHOLD and _has_shared_specific_keyword(left_keywords, right_keywords):
         return True
 
     if not left_keywords or not right_keywords:
@@ -69,6 +79,25 @@ def _is_similar_article(left: Article, right: Article) -> bool:
 
     overlap = len(left_keywords & right_keywords) / min(len(left_keywords), len(right_keywords))
     return overlap >= KEYWORD_OVERLAP_THRESHOLD and _has_shared_specific_keyword(left_keywords, right_keywords)
+
+
+def _title_similarity(left_title: str, right_title: str) -> float:
+    return SequenceMatcher(None, left_title, right_title).ratio()
+
+
+def _token_set_similarity(left_title: str, right_title: str) -> float:
+    if fuzz is not None:
+        return float(fuzz.token_set_ratio(left_title, right_title))
+    return _fallback_token_set_ratio(left_title, right_title)
+
+
+def _fallback_token_set_ratio(left_title: str, right_title: str) -> float:
+    left_tokens = set(left_title.split())
+    right_tokens = set(right_title.split())
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = len(left_tokens & right_tokens) / min(len(left_tokens), len(right_tokens))
+    return overlap * 100
 
 
 def _merge_article_cluster(cluster: List[Article]) -> Article:

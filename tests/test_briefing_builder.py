@@ -215,6 +215,63 @@ class BriefingBuilderTest(unittest.TestCase):
 
         self.assertEqual(payload.items, [])
 
+    def test_skips_article_when_summary_quality_is_too_poor(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        article = Article(
+            team_slug="liverpool",
+            source_name="This Is Anfield",
+            external_id="article-1",
+            canonical_url="https://example.com/van-dijk",
+            title="Virgil van Dijk explains Anfield moment",
+            body="Virgil van Dijk explained why he sat alone on the Anfield pitch.",
+            published_at=published_at,
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[article],
+            social_posts=[],
+            published_at=published_at,
+            article_summarizer=lambda item: {
+                "headline_ko": "비르길 판 디jk, 안필드에서 혼자 울었다는 이유는?",
+                "body_ko": "비르길 판 디jk는 안필드에서 혼자 울었다는 이유를 설명했다.",
+                "confidence_label": "reported",
+                "category": "team_news",
+            },
+        )
+
+        self.assertEqual(payload.items, [])
+
+    def test_skips_social_post_when_summary_is_generic(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        social_post = SocialPost(
+            team_slug="liverpool",
+            platform="x",
+            source_name="LFCTransferRoom",
+            external_post_id="post-1",
+            author_handle="LFCTransferRoom",
+            text="Liverpool could have a double profit opportunity.",
+            url="https://x.com/LFCTransferRoom/status/post-1",
+            published_at=published_at,
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[],
+            social_posts=[social_post],
+            published_at=published_at,
+            social_post_summarizer=lambda item: {
+                "headline_ko": "리버풀, 이중 수익 기회",
+                "body_ko": "LFCTransferRoom이 공유했습니다.",
+                "confidence_label": "reporter_claim",
+                "category": "transfer",
+            },
+        )
+
+        self.assertEqual(payload.items, [])
+
     def test_builds_article_item_with_multiple_sources(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
         article = Article(

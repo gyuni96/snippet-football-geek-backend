@@ -17,6 +17,7 @@ class SourceConfig:
     description: str
     listing_url: Optional[str] = None
     listing_required_terms: Tuple[str, ...] = ()
+    listing_excluded_terms: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,14 @@ LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
         rss_url=None,
         description="리버풀 FC의 공식 홈페이지로 공식 성명, 매치 리포트 및 오피셜 소식을 제공합니다.",
         listing_url="https://www.liverpoolfc.com/news",
+        listing_excluded_terms=(
+            "greatest",
+            "goal-season",
+            "goal of the season",
+            "competition",
+            "win-liverpool-shirt",
+            "season-player-review",
+        ),
     ),
     "liverpool_echo": SourceConfig(
         key="liverpool_echo",

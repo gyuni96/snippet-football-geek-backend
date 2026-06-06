@@ -120,6 +120,14 @@ class RunBriefingCliTest(unittest.TestCase):
             team_slug="liverpool",
             source_name="Liverpool FC Official Website",
             required_terms=(),
+            excluded_terms=(
+                "greatest",
+                "goal-season",
+                "goal of the season",
+                "competition",
+                "win-liverpool-shirt",
+                "season-player-review",
+            ),
         )
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_type, "article")

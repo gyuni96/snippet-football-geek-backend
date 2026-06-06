@@ -26,6 +26,7 @@ def collect_html_listing_items(
     article_body_extractor: Optional[ArticleBodyExtractor] = None,
     max_items: int = 20,
     required_terms: tuple[str, ...] = (),
+    excluded_terms: tuple[str, ...] = (),
 ) -> List[RawItem]:
     active_fetcher = fetcher or fetch_url
     page_html = active_fetcher(listing_url).decode("utf-8", errors="replace")
@@ -34,6 +35,7 @@ def collect_html_listing_items(
         listing_url=listing_url,
         max_items=max_items,
         required_terms=required_terms,
+        excluded_terms=excluded_terms,
     )
     active_article_body_extractor = article_body_extractor or extract_article_body
     published_at = datetime.now(timezone.utc)
@@ -63,6 +65,7 @@ def parse_listing_links(
     listing_url: str,
     max_items: int = 20,
     required_terms: tuple[str, ...] = (),
+    excluded_terms: tuple[str, ...] = (),
 ) -> List[tuple[str, str]]:
     listing_host = _host(listing_url)
     links: List[tuple[str, str]] = []
@@ -79,7 +82,7 @@ def parse_listing_links(
             continue
 
         title = _clean_text(_attr(attrs, "aria-label") or _attr(attrs, "title") or match.group("body"))
-        if not _looks_like_article_link(url, title, required_terms=required_terms):
+        if not _looks_like_article_link(url, title, required_terms=required_terms, excluded_terms=excluded_terms):
             continue
 
         seen_urls.add(url)
@@ -90,7 +93,12 @@ def parse_listing_links(
     return links
 
 
-def _looks_like_article_link(url: str, title: str, required_terms: tuple[str, ...]) -> bool:
+def _looks_like_article_link(
+    url: str,
+    title: str,
+    required_terms: tuple[str, ...],
+    excluded_terms: tuple[str, ...],
+) -> bool:
     if len(title) < 12:
         return False
     lowered_url = url.lower()
@@ -113,6 +121,8 @@ def _looks_like_article_link(url: str, title: str, required_terms: tuple[str, ..
         "football 2026",
     }
     if lowered_title in excluded_titles or any(marker in lowered_url for marker in excluded_markers):
+        return False
+    if excluded_terms and any(term.lower() in lowered_url or term.lower() in lowered_title for term in excluded_terms):
         return False
     if required_terms and not any(term.lower() in lowered_url or term.lower() in lowered_title for term in required_terms):
         return False

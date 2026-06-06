@@ -441,6 +441,7 @@ def collect_raw_items(
                             team_slug=team_slug,
                             source_name=source.name,
                             required_terms=getattr(source, "listing_required_terms", ()),
+                            excluded_terms=getattr(source, "listing_excluded_terms", ()),
                         )
                     )
                     if diagnostics is not None:

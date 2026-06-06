@@ -37,6 +37,8 @@ def build_briefing_payload(
         article_summary = _summarize_article(article, article_summarizer)
         if article_summary is None:
             continue
+        if _is_low_quality_summary(article_summary):
+            continue
         category = normalize_category(article_summary["category"])
         items.append(
             BriefingItem(
@@ -58,6 +60,8 @@ def build_briefing_payload(
             continue
         social_summary = _summarize_social_post(post, social_post_summarizer)
         if social_summary is None:
+            continue
+        if _is_low_quality_summary(social_summary):
             continue
         category = normalize_category(social_summary["category"])
         items.append(
@@ -170,3 +174,41 @@ def _clean_social_text(value: str) -> str:
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"\bRT\s+@", "@", text)
     return " ".join(text.split()).strip()
+
+
+def _is_low_quality_summary(summary: Dict[str, str]) -> bool:
+    headline = summary.get("headline_ko", "")
+    body = summary.get("body_ko", "")
+    combined = f"{headline} {body}"
+    if _has_broken_mixed_token(combined):
+        return True
+    if _has_placeholder_body(body):
+        return True
+    return False
+
+
+def _has_broken_mixed_token(value: str) -> bool:
+    known_bad_fragments = (
+        "아노니 Andoni",
+        "안디니 Andoni",
+        "베를린 뮌헨",
+        "리오 누고마",
+    )
+    if any(fragment in value for fragment in known_bad_fragments):
+        return True
+    return bool(
+        re.search(r"[가-힣][a-z]{2,}", value)
+    )
+
+
+def _has_placeholder_body(value: str) -> bool:
+    normalized = " ".join(value.split())
+    if re.fullmatch(r"[A-Za-z0-9_ ]+(이|가)? 공유했습니다\.?", normalized):
+        return True
+    generic_patterns = (
+        "관련 소식을 전했습니다.",
+        "소식을 전했습니다.",
+        "내용을 전했습니다.",
+        "원문 확인이 필요",
+    )
+    return any(pattern in normalized for pattern in generic_patterns)

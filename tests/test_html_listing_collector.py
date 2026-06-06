@@ -44,6 +44,23 @@ class HtmlListingCollectorTest(unittest.TestCase):
             [("Liverpool next manager", "https://www.bbc.com/sport/football/articles/c4gv1ydm4yro")],
         )
 
+    def test_parse_listing_links_applies_excluded_terms(self):
+        html = """
+        <a href="/news/liverpools-greatest-no83-vladimir-smicer">Liverpool's greatest No.83: Vladimir Smicer</a>
+        <a href="/news/liverpool-transfer-update">Liverpool transfer update latest</a>
+        """
+
+        links = parse_listing_links(
+            html,
+            listing_url="https://www.liverpoolfc.com/news",
+            excluded_terms=("greatest",),
+        )
+
+        self.assertEqual(
+            links,
+            [("Liverpool transfer update latest", "https://www.liverpoolfc.com/news/liverpool-transfer-update")],
+        )
+
     def test_collect_html_listing_items_fetches_body_for_links(self):
         listing_html = """
         <a href="/news/liverpool-transfer-update">Liverpool transfer update latest</a>

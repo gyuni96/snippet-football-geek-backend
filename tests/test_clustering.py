@@ -93,6 +93,34 @@ class ArticleClusteringTest(unittest.TestCase):
 
         self.assertEqual(len(cluster_similar_articles(articles)), 2)
 
+    def test_clusters_headlines_with_different_word_order(self):
+        published_at = datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc)
+        articles = [
+            Article(
+                team_slug="liverpool",
+                source_name="This Is Anfield",
+                external_id="article-1",
+                canonical_url="https://www.thisisanfield.com/news/ngumoha-bayern",
+                title="Rio Ngumoha not for sale as Bayern Munich interest emerges",
+                body="Liverpool do not plan to sell Rio Ngumoha.",
+                published_at=published_at,
+            ),
+            Article(
+                team_slug="liverpool",
+                source_name="BBC Sport - Liverpool",
+                external_id="article-2",
+                canonical_url="https://www.bbc.com/sport/football/articles/ngumoha",
+                title="Bayern interested in Liverpool winger Ngumoha but Reds refuse sale",
+                body="Bayern Munich are interested in Ngumoha but Liverpool will not sell.",
+                published_at=datetime(2026, 6, 6, 10, 0, tzinfo=timezone.utc),
+            ),
+        ]
+
+        clustered = cluster_similar_articles(articles)
+
+        self.assertEqual(len(clustered), 1)
+        self.assertEqual(clustered[0].source_names, ["This Is Anfield", "BBC Sport - Liverpool"])
+
 
 if __name__ == "__main__":
     unittest.main()
