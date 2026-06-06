@@ -180,7 +180,60 @@ def _load_twikit_client():
         raise RuntimeError(
             "twikit is required for X profile collection. Install it with `python3 -m pip install twikit`."
         ) from error
+    _patch_twikit_legacy_defaults()
     return twikit_module.Client(language="en-US")
+
+
+def _patch_twikit_legacy_defaults() -> None:
+    try:
+        user_module = import_module("twikit.user")
+        tweet_module = import_module("twikit.tweet")
+    except ModuleNotFoundError:
+        return
+
+    if not getattr(user_module.User, "_snippet_defaults_patched", False):
+        original_user_init = user_module.User.__init__
+
+        def patched_user_init(self, client, data):
+            data.setdefault("is_blue_verified", False)
+            legacy = data.setdefault("legacy", {})
+            legacy.setdefault("withheld_in_countries", [])
+            legacy.setdefault("pinned_tweet_ids_str", [])
+            legacy.setdefault("possibly_sensitive", False)
+            legacy.setdefault("can_dm", False)
+            legacy.setdefault("can_media_tag", False)
+            legacy.setdefault("want_retweets", False)
+            legacy.setdefault("default_profile", False)
+            legacy.setdefault("default_profile_image", False)
+            legacy.setdefault("has_custom_timelines", False)
+            legacy.setdefault("fast_followers_count", legacy.get("followers_count", 0))
+            legacy.setdefault("normal_followers_count", legacy.get("followers_count", 0))
+            legacy.setdefault("media_count", 0)
+            legacy.setdefault("is_translator", False)
+            legacy.setdefault("translator_type", "")
+            return original_user_init(self, client, data)
+
+        user_module.User.__init__ = patched_user_init
+        user_module.User._snippet_defaults_patched = True
+
+    if not getattr(tweet_module.Tweet, "_snippet_defaults_patched", False):
+        original_tweet_init = tweet_module.Tweet.__init__
+
+        def patched_tweet_init(self, client, data, user=None):
+            data.setdefault("edit_control", {})
+            data.setdefault("is_translatable", False)
+            data.setdefault("views", {"state": "Unknown"})
+            legacy = data.setdefault("legacy", {})
+            legacy.setdefault("quote_count", 0)
+            legacy.setdefault("reply_count", 0)
+            legacy.setdefault("favorite_count", 0)
+            legacy.setdefault("favorited", False)
+            legacy.setdefault("retweet_count", 0)
+            legacy.setdefault("entities", {})
+            return original_tweet_init(self, client, data, user)
+
+        tweet_module.Tweet.__init__ = patched_tweet_init
+        tweet_module.Tweet._snippet_defaults_patched = True
 
 
 async def _collect_twikit_posts(
@@ -205,8 +258,8 @@ async def _collect_twikit_posts(
         auth_token=auth_token,
         ct0=ct0,
     )
-    user = await client.get_user_by_screen_name(profile.handle)
-    tweets = await client.get_user_tweets(user.id, "Tweets", count=max_posts)
+    user = await _maybe_await(client.get_user_by_screen_name(profile.handle))
+    tweets = await _maybe_await(client.get_user_tweets(user.id, "Tweets", count=max_posts))
     return [_twikit_tweet_to_post(profile.handle, tweet) for tweet in tweets]
 
 
@@ -248,9 +301,15 @@ async def _prepare_twikit_session(
             "cookies_file": cookies_file,
         },
     )
-    await client.login(**login_kwargs)
+    await _maybe_await(client.login(**login_kwargs))
     if cookies_file and "cookies_file" not in login_kwargs and hasattr(client, "save_cookies"):
         client.save_cookies(cookies_file)
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
 
 
 def _filter_supported_kwargs(callable_object, values: dict) -> dict:
@@ -287,10 +346,19 @@ def _twikit_tweet_text(tweet) -> str:
 def _twikit_tweet_published_at(tweet) -> datetime:
     published_at = getattr(tweet, "created_at_datetime", None)
     if published_at is None:
-        published_at = parsedate_to_datetime(tweet.created_at)
+        published_at = parsedate_to_datetime(_twikit_tweet_created_at_text(tweet))
     if published_at.tzinfo is None:
         return published_at.replace(tzinfo=timezone.utc)
     return published_at.astimezone(timezone.utc)
+
+
+def _twikit_tweet_created_at_text(tweet) -> str:
+    created_at = getattr(tweet, "created_at", None)
+    if created_at:
+        return created_at
+    raw_data = getattr(tweet, "_data", {}) or {}
+    legacy = raw_data.get("legacy", {})
+    return legacy["created_at"]
 
 
 def _extract_posts_from_page(page, max_posts: int) -> List[XProfilePost]:

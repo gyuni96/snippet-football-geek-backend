@@ -322,6 +322,72 @@ class XProfileCollectorTest(unittest.TestCase):
         self.assertEqual(captured["loaded_cookies"]["ct0"], "csrf-token")
         self.assertEqual(posts[0].post_id, "123")
 
+    def test_twikit_provider_supports_sync_client_methods(self):
+        published_at = datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc)
+
+        class FakeSyncTwikitClient:
+            def load_cookies(self, path):
+                pass
+
+            def get_user_by_screen_name(self, screen_name):
+                return SimpleNamespace(id="user-1")
+
+            def get_user_tweets(self, user_id, tweet_type, count):
+                return [
+                    SimpleNamespace(
+                        id="123",
+                        text="Liverpool are monitoring a transfer target.",
+                        created_at_datetime=published_at,
+                    )
+                ]
+
+        with TemporaryDirectory() as temp_dir:
+            cookies_file = Path(temp_dir) / "x_cookies.json"
+            cookies_file.write_text(json.dumps({"auth_token": "auth-token", "ct0": "csrf-token"}), encoding="utf-8")
+            provider = build_twikit_post_provider(
+                cookies_file=str(cookies_file),
+                max_posts=1,
+                client_factory=FakeSyncTwikitClient,
+            )
+
+            posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(posts[0].post_id, "123")
+
+    def test_twikit_provider_reads_created_at_from_raw_tweet_data(self):
+        class FakeTwikitClient:
+            def load_cookies(self, path):
+                pass
+
+            def get_user_by_screen_name(self, screen_name):
+                return SimpleNamespace(id="user-1")
+
+            def get_user_tweets(self, user_id, tweet_type, count):
+                return [
+                    SimpleNamespace(
+                        id="123",
+                        text="Liverpool are monitoring a transfer target.",
+                        _data={
+                            "legacy": {
+                                "created_at": "Sat Jun 06 09:00:00 +0000 2026",
+                            }
+                        },
+                    )
+                ]
+
+        with TemporaryDirectory() as temp_dir:
+            cookies_file = Path(temp_dir) / "x_cookies.json"
+            cookies_file.write_text(json.dumps({"auth_token": "auth-token", "ct0": "csrf-token"}), encoding="utf-8")
+            provider = build_twikit_post_provider(
+                cookies_file=str(cookies_file),
+                max_posts=1,
+                client_factory=FakeTwikitClient,
+            )
+
+            posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(posts[0].published_at, datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc))
+
 
 if __name__ == "__main__":
     unittest.main()
