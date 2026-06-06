@@ -108,6 +108,43 @@ class DiscordNotificationTest(unittest.TestCase):
             "⚠️ Groq daily token limit has been reached; skipping remaining Groq requests.",
         )
 
+    def test_builds_groq_model_field_when_model_tracking_exists(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="warning",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+            groq_primary_model="llama-3.3-70b-versatile",
+            groq_current_model="meta-llama/llama-4-scout-17b-16e-instruct",
+            groq_fallback_models=[
+                "meta-llama/llama-4-scout-17b-16e-instruct",
+                "qwen/qwen3-32b",
+            ],
+        )
+
+        fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
+        self.assertEqual(
+            fields["🤖 Groq 모델"],
+            "시작: llama-3.3-70b-versatile\n"
+            "현재: meta-llama/llama-4-scout-17b-16e-instruct\n"
+            "fallback: meta-llama/llama-4-scout-17b-16e-instruct, qwen/qwen3-32b",
+        )
+
+    def test_omits_groq_model_field_when_model_tracking_is_empty(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="success",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+        )
+
+        fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
+        self.assertNotIn("🤖 Groq 모델", fields)
+
     def test_discord_notifier_posts_json_payload(self):
         requests = []
 

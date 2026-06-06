@@ -32,6 +32,10 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertIn("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}", content)
         self.assertIn("GROQ_REQUESTS_PER_MINUTE: \"10\"", content)
         self.assertIn("GROQ_MAX_REQUESTS: \"60\"", content)
+        self.assertIn(
+            "GROQ_FALLBACK_MODELS: \"meta-llama/llama-4-scout-17b-16e-instruct,qwen/qwen3-32b\"",
+            content,
+        )
         self.assertIn("SUPABASE_URL: ${{ secrets.SUPABASE_URL }}", content)
         self.assertIn("SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}", content)
         self.assertIn("--save-supabase", content)

@@ -4,8 +4,10 @@ from urllib.error import HTTPError
 from io import BytesIO
 
 from app.groq import (
+    DEFAULT_GROQ_FALLBACK_MODELS,
     GroqAPIError,
     GroqClient,
+    GroqModelRouter,
     GroqUsageGuard,
     summarize_article_with_groq,
     summarize_social_post_with_groq,
@@ -50,6 +52,8 @@ class GroqTest(unittest.TestCase):
         self.assertIn("Do not invent transfer fees", client.messages[0]["content"])
         self.assertIn("Only use facts present in the provided title and body", client.messages[0]["content"])
         self.assertIn("Do not use Hanja, Kanji, Hanzi, Kana", client.messages[0]["content"])
+        self.assertIn("Bad headline", client.messages[0]["content"])
+        self.assertIn("Good headline", client.messages[0]["content"])
 
     def test_summarize_article_with_groq_normalizes_unknown_confidence_label(self):
         article = Article(
@@ -229,6 +233,8 @@ class GroqTest(unittest.TestCase):
         self.assertIn("Return valid JSON only", client.messages[0]["content"])
         self.assertIn("Never use generic headlines", client.messages[0]["content"])
         self.assertIn("weak social signal", client.messages[0]["content"])
+        self.assertIn("Bad body", client.messages[0]["content"])
+        self.assertIn("Good body", client.messages[0]["content"])
         self.assertIn("RT @David_Ornstein", client.messages[1]["content"])
 
     def test_summarize_social_post_with_groq_restores_known_proper_names(self):
@@ -495,6 +501,73 @@ class GroqTest(unittest.TestCase):
 
         self.assertEqual(calls, ["post"])
         self.assertIn("daily token limit", str(context.exception))
+
+    def test_groq_client_switches_to_fallback_model_after_daily_token_limit(self):
+        requested_models = []
+        switch_messages = []
+
+        def fake_http_post(url, headers, body):
+            requested_models.append(body["model"])
+            if body["model"] == "primary-model":
+                raise HTTPError(
+                    url,
+                    429,
+                    "Too Many Requests",
+                    hdrs=None,
+                    fp=BytesIO(
+                        b'{"error":{"message":"Rate limit reached for model `primary-model` on tokens per day (TPD). Type: tokens Code: rate_limit_exceeded"}}'
+                    ),
+                )
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "headline_ko": "헤드라인",
+                                    "body_ko": "본문",
+                                    "confidence_label": "reported",
+                                    "category": "team_news",
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        router = GroqModelRouter(
+            primary_model="primary-model",
+            fallback_models=["fallback-model"],
+            on_switch=switch_messages.append,
+        )
+        client = GroqClient(
+            api_key="test-key",
+            model_router=router,
+            http_post=fake_http_post,
+            usage_guard=GroqUsageGuard(max_requests=10),
+        )
+
+        content = client.chat_json([{"role": "user", "content": "hello"}])
+        client.chat_json([{"role": "user", "content": "again"}])
+
+        self.assertEqual(content["headline_ko"], "헤드라인")
+        self.assertEqual(requested_models, ["primary-model", "fallback-model", "fallback-model"])
+        self.assertEqual(router.current_model, "fallback-model")
+        self.assertEqual(
+            switch_messages,
+            ["Groq model fallback: primary-model -> fallback-model (daily token limit reached)."],
+        )
+
+    def test_default_groq_fallback_models_exclude_8b_test_model(self):
+        self.assertEqual(
+            DEFAULT_GROQ_FALLBACK_MODELS,
+            [
+                "meta-llama/llama-4-scout-17b-16e-instruct",
+                "qwen/qwen3-32b",
+            ],
+        )
+        self.assertNotIn("llama-3.1-8b-instant", DEFAULT_GROQ_FALLBACK_MODELS)
 
     def test_groq_client_converts_http_error_to_safe_error_message(self):
         def fake_http_post(url, headers, body):

@@ -52,6 +52,9 @@ def build_discord_run_message(
     github_run_url: Optional[str] = None,
     x_auth_issue_handles: Optional[List[str]] = None,
     groq_issue_messages: Optional[List[str]] = None,
+    groq_primary_model: Optional[str] = None,
+    groq_current_model: Optional[str] = None,
+    groq_fallback_models: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     items = payload.items if payload is not None else []
     article_count = sum(1 for item in items if item.source_type == "article")
@@ -68,6 +71,13 @@ def build_discord_run_message(
     ]
     if github_run_url:
         fields.append({"name": "GitHub Actions", "value": github_run_url, "inline": False})
+    groq_model_field = _build_groq_model_field(
+        primary_model=groq_primary_model,
+        current_model=groq_current_model,
+        fallback_models=groq_fallback_models or [],
+    )
+    if groq_model_field:
+        fields.append({"name": "🤖 Groq 모델", "value": groq_model_field, "inline": False})
     if x_auth_issue_handles:
         handles = ", ".join(f"@{handle}" for handle in x_auth_issue_handles)
         fields.append({"name": "⚠️ X 인증 상태", "value": f"⚠️ 토큰/쿠키 만료 의심: {handles}", "inline": False})
@@ -92,6 +102,23 @@ def build_discord_run_message(
             }
         ],
     }
+
+
+def _build_groq_model_field(
+    primary_model: Optional[str],
+    current_model: Optional[str],
+    fallback_models: List[str],
+) -> Optional[str]:
+    if not primary_model and not current_model and not fallback_models:
+        return None
+    lines = []
+    if primary_model:
+        lines.append(f"시작: {primary_model}")
+    if current_model:
+        lines.append(f"현재: {current_model}")
+    if fallback_models:
+        lines.append(f"fallback: {', '.join(fallback_models)}")
+    return _trim_discord_field("\n".join(lines))
 
 
 def _trim_discord_field(value: str) -> str:

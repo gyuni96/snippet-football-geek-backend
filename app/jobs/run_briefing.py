@@ -29,8 +29,10 @@ from app.dedupe import dedupe_articles, dedupe_social_posts
 from app.env import load_env_file
 from app.freshness import filter_fresh_items, parse_iso_datetime
 from app.groq import (
+    DEFAULT_GROQ_FALLBACK_MODELS,
     DEFAULT_GROQ_MODEL,
     GroqClient,
+    GroqModelRouter,
     GroqRateLimiter,
     GroqUsageGuard,
     summarize_article_with_groq,
@@ -60,6 +62,9 @@ class PipelineDiagnostics:
     x_failed: bool = False
     x_auth_issue_handles: List[str] = field(default_factory=list)
     groq_issue_messages: List[str] = field(default_factory=list)
+    groq_primary_model: Optional[str] = None
+    groq_current_model: Optional[str] = None
+    groq_fallback_models: List[str] = field(default_factory=list)
 
     def notification_status(self) -> str:
         if self.groq_issue_messages:
@@ -76,6 +81,17 @@ class PipelineDiagnostics:
             return "failed"
         has_failure = any(failed for _succeeded, failed in attempted)
         return "warning" if has_failure else "success"
+
+    def track_groq_models(self, models: List[str], current_model: Optional[str] = None) -> None:
+        if not models:
+            return
+        self.groq_primary_model = models[0]
+        self.groq_current_model = current_model or models[0]
+        self.groq_fallback_models = list(models[1:])
+
+    def record_groq_issue(self, message: str) -> None:
+        if message not in self.groq_issue_messages:
+            self.groq_issue_messages.append(message)
 
 
 def main() -> None:
@@ -98,6 +114,13 @@ def main() -> None:
     parser.add_argument("--state-file")
     parser.add_argument("--use-groq", action="store_true")
     parser.add_argument("--groq-model", default=DEFAULT_GROQ_MODEL)
+    parser.add_argument(
+        "--groq-fallback-model",
+        action="append",
+        dest="groq_fallback_models",
+        default=[],
+        help="Groq 기본 모델 한도 초과 시 사용할 fallback 모델입니다. 여러 번 사용할 수 있습니다.",
+    )
     parser.add_argument(
         "--groq-requests-per-minute",
         type=int,
@@ -126,6 +149,9 @@ def main() -> None:
     groq_max_requests = args.groq_max_requests
     if groq_max_requests is None:
         groq_max_requests = int(os.environ.get("GROQ_MAX_REQUESTS", "60"))
+    groq_fallback_models = args.groq_fallback_models or _parse_groq_fallback_models(
+        os.environ.get("GROQ_FALLBACK_MODELS")
+    )
     supabase_client = build_supabase_client_from_env() if args.save_supabase else None
     since_text = resolve_since_text(
         team_slug=args.team,
@@ -155,6 +181,7 @@ def main() -> None:
             use_groq=args.use_groq,
             groq_api_key=os.environ.get("GROQ_API_KEY"),
             groq_model=args.groq_model,
+            groq_fallback_models=groq_fallback_models,
             groq_requests_per_minute=groq_requests_per_minute,
             groq_max_requests=groq_max_requests,
             limit=args.limit,
@@ -182,6 +209,9 @@ def main() -> None:
                 github_run_url=build_github_run_url_from_env(),
                 x_auth_issue_handles=diagnostics.x_auth_issue_handles,
                 groq_issue_messages=diagnostics.groq_issue_messages,
+                groq_primary_model=diagnostics.groq_primary_model,
+                groq_current_model=diagnostics.groq_current_model,
+                groq_fallback_models=diagnostics.groq_fallback_models,
             )
     except Exception as error:
         if args.save_monitoring:
@@ -227,6 +257,7 @@ def run_pipeline(
     use_groq: bool = False,
     groq_api_key: Optional[str] = None,
     groq_model: str = DEFAULT_GROQ_MODEL,
+    groq_fallback_models: Optional[List[str]] = None,
     groq_requests_per_minute: Optional[int] = 10,
     groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
@@ -248,6 +279,7 @@ def run_pipeline(
         use_groq=use_groq,
         groq_api_key=groq_api_key,
         groq_model=groq_model,
+        groq_fallback_models=groq_fallback_models,
         groq_requests_per_minute=groq_requests_per_minute,
         groq_max_requests=groq_max_requests,
         limit=limit,
@@ -272,6 +304,7 @@ def run_pipeline_with_diagnostics(
     use_groq: bool = False,
     groq_api_key: Optional[str] = None,
     groq_model: str = DEFAULT_GROQ_MODEL,
+    groq_fallback_models: Optional[List[str]] = None,
     groq_requests_per_minute: Optional[int] = 10,
     groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
@@ -328,9 +361,21 @@ def run_pipeline_with_diagnostics(
             if groq_max_requests is not None and groq_max_requests > 0
             else None
         )
+        groq_model_router = GroqModelRouter(
+            primary_model=groq_model,
+            fallback_models=groq_fallback_models if groq_fallback_models is not None else DEFAULT_GROQ_FALLBACK_MODELS,
+        )
+        diagnostics.track_groq_models(groq_model_router.models, groq_model_router.current_model)
+
+        def record_groq_model_switch(message: str) -> None:
+            diagnostics.record_groq_issue(message)
+            diagnostics.groq_current_model = groq_model_router.current_model
+
+        groq_model_router.on_switch = record_groq_model_switch
         article_summarizer = build_article_summarizer(
             api_key=groq_api_key,
             model=groq_model,
+            model_router=groq_model_router,
             rate_limiter=groq_rate_limiter,
             usage_guard=groq_usage_guard,
             diagnostics=diagnostics,
@@ -338,6 +383,7 @@ def run_pipeline_with_diagnostics(
         social_post_summarizer = build_social_post_summarizer(
             api_key=groq_api_key,
             model=groq_model,
+            model_router=groq_model_router,
             rate_limiter=groq_rate_limiter,
             usage_guard=groq_usage_guard,
             diagnostics=diagnostics,
@@ -513,22 +559,36 @@ def build_x_post_provider(provider_name: str, storage_state_path: str, cookies_f
 def build_article_summarizer(
     api_key: str,
     model: str,
+    model_router: Optional[GroqModelRouter] = None,
     rate_limiter: Optional[GroqRateLimiter] = None,
     usage_guard: Optional[GroqUsageGuard] = None,
     diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> Callable[[Article], dict]:
-    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
+    client = GroqClient(
+        api_key=api_key,
+        model=model,
+        model_router=model_router,
+        rate_limiter=rate_limiter,
+        usage_guard=usage_guard,
+    )
     return lambda article: _summarize_article_with_groq_diagnostics(article, client, diagnostics)
 
 
 def build_social_post_summarizer(
     api_key: str,
     model: str,
+    model_router: Optional[GroqModelRouter] = None,
     rate_limiter: Optional[GroqRateLimiter] = None,
     usage_guard: Optional[GroqUsageGuard] = None,
     diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> Callable[[SocialPost], dict]:
-    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
+    client = GroqClient(
+        api_key=api_key,
+        model=model,
+        model_router=model_router,
+        rate_limiter=rate_limiter,
+        usage_guard=usage_guard,
+    )
     return lambda post: _summarize_social_post_with_groq_diagnostics(post, client, diagnostics)
 
 
@@ -569,6 +629,12 @@ def _record_groq_issue_if_needed(error: RuntimeError, diagnostics: Optional[Pipe
     ):
         if message not in diagnostics.groq_issue_messages:
             diagnostics.groq_issue_messages.append(message)
+
+
+def _parse_groq_fallback_models(value: Optional[str]) -> List[str]:
+    if not value:
+        return list(DEFAULT_GROQ_FALLBACK_MODELS)
+    return [model.strip() for model in value.split(",") if model.strip()]
 
 
 def resolve_since_text(
@@ -641,6 +707,9 @@ def notify_discord_run(
     github_run_url: Optional[str] = None,
     x_auth_issue_handles: Optional[List[str]] = None,
     groq_issue_messages: Optional[List[str]] = None,
+    groq_primary_model: Optional[str] = None,
+    groq_current_model: Optional[str] = None,
+    groq_fallback_models: Optional[List[str]] = None,
 ) -> None:
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook_url:
@@ -658,6 +727,9 @@ def notify_discord_run(
         github_run_url=github_run_url,
         x_auth_issue_handles=x_auth_issue_handles or [],
         groq_issue_messages=groq_issue_messages or [],
+        groq_primary_model=groq_primary_model,
+        groq_current_model=groq_current_model,
+        groq_fallback_models=groq_fallback_models or [],
     )
     try:
         DiscordNotifier(webhook_url=webhook_url).send(message)
