@@ -64,7 +64,15 @@ python3 -m app.jobs.run_briefing \
 - `x_reporters`: 지정 기자 X 프로필 묶음, 현재는 실제 스크래핑 전 어댑터 뼈대
 - `james_pearce`: James Pearce X 프로필
 
-X 프로필 소스는 현재 실제 네트워크 스크래핑을 수행하지 않습니다. `app.collectors.x_profiles`는 테스트 가능한 어댑터 뼈대이며, 실제 X 수집기는 `post_provider`를 교체하는 방식으로 붙입니다.
+X 프로필 소스는 `snscrape` provider를 사용합니다. 로컬에서 X 수집을 테스트하려면 선택 의존성을 설치합니다.
+
+```bash
+python3 -m pip install ".[x]"
+```
+
+`app.collectors.x_profiles`는 `post_provider`를 주입할 수 있게 만들어두었기 때문에, `snscrape`가 불안정해지면 Playwright 같은 다른 수집기로 교체할 수 있습니다.
+
+현재 로컬 live 테스트에서는 `snscrape`가 X/Twitter GraphQL 요청에서 `blocked (404)`로 실패했습니다. 그래서 구조와 변환 로직은 준비됐지만, 운영 수집 방식은 Playwright 기반 스크래핑이나 인증 세션 기반 provider로 이어서 보강해야 합니다.
 
 새로운 소식만 확인하려면 `--since`를 지정합니다. 데이터 보관 정책은 기본 7일 기준으로 보고, 그보다 오래된 항목은 콘솔 payload 생성 전에 제외합니다.
 
