@@ -2,7 +2,7 @@
 
 축구 소식을 수집하고 정리해 한국어 팀별 브리핑으로 저장하는 Python 배치 백엔드입니다.
 
-MVP는 Liverpool 소식을 대상으로 하며, GitHub Actions 스케줄을 통해 하루 2회 기본 브리핑을 생성하는 구조로 시작합니다. 이적시장이나 경기일처럼 소식이 많은 기간에는 실행 횟수를 늘릴 수 있도록 설계합니다.
+MVP는 Liverpool 소식을 대상으로 하며, GitHub Actions 스케줄을 통해 하루 3회 기본 브리핑을 생성하는 구조로 시작합니다. 이적시장이나 경기일처럼 소식이 많은 기간에는 실행 횟수를 늘릴 수 있도록 설계합니다.
 
 ## 실행 구조
 
@@ -113,10 +113,23 @@ python3 -m app.jobs.run_briefing \
 - `items[].section`
 - `items[].headline_ko`
 - `items[].body_ko`
+- `items[].category`
+- `items[].category_label_ko`
 - `items[].confidence_label`
 - `items[].source_urls`
 - `items[].source_names`
 - `items[].source_type`
+
+현재 대표 카테고리는 항목당 하나만 사용합니다.
+
+- `transfer`: 이적
+- `injury`: 부상
+- `match_result`: 경기 결과
+- `match_preview`: 경기 프리뷰
+- `team_news`: 팀 소식
+- `official`: 오피셜
+- `rumor`: 루머
+- `etc`: 기타
 
 ## 테스트
 

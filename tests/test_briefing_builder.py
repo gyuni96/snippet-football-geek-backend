@@ -46,10 +46,14 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].confidence_label, "reported")
         self.assertEqual(payload.items[0].source_names, ["Liverpool Echo"])
         self.assertEqual(payload.items[0].source_type, "article")
+        self.assertEqual(payload.items[0].category, "transfer")
+        self.assertEqual(payload.items[0].category_label_ko, "이적")
         self.assertEqual(payload.items[1].section, "reporter_signals")
         self.assertEqual(payload.items[1].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[1].source_names, ["James Pearce"])
         self.assertEqual(payload.items[1].source_type, "social_post")
+        self.assertEqual(payload.items[1].category, "transfer")
+        self.assertEqual(payload.items[1].category_label_ko, "이적")
 
     def test_builds_article_item_with_groq_summarizer_when_provided(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
@@ -74,11 +78,14 @@ class BriefingBuilderTest(unittest.TestCase):
                 "headline_ko": "리버풀, 중원 후보 주시",
                 "body_ko": "여름 이적시장을 앞두고 체크할 만한 흐름입니다.",
                 "confidence_label": "reported",
+                "category": "transfer",
             },
         )
 
         self.assertEqual(payload.items[0].headline_ko, "리버풀, 중원 후보 주시")
         self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
+        self.assertEqual(payload.items[0].category, "transfer")
+        self.assertEqual(payload.items[0].category_label_ko, "이적")
 
     def test_builds_afternoon_briefing_title(self):
         published_at = datetime(2026, 6, 6, 16, 0, tzinfo=timezone.utc)

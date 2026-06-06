@@ -8,6 +8,7 @@
 from datetime import datetime
 from typing import Callable, Dict, Iterable, List, Optional
 
+from app.categories import category_label_ko, classify_article, classify_social_post, normalize_category
 from app.models import Article, BriefingItem, BriefingPayload, SocialPost
 
 
@@ -32,11 +33,14 @@ def build_briefing_payload(
 
     for article in articles:
         article_summary = _summarize_article(article, article_summarizer)
+        category = normalize_category(article_summary["category"])
         items.append(
             BriefingItem(
                 section="top_stories",
                 headline_ko=article_summary["headline_ko"],
                 body_ko=article_summary["body_ko"],
+                category=category,
+                category_label_ko=category_label_ko(category),
                 source_count=1,
                 confidence_label=article_summary["confidence_label"],
                 source_urls=[article.canonical_url],
@@ -46,11 +50,14 @@ def build_briefing_payload(
         )
 
     for post in social_posts:
+        category = classify_social_post(post)
         items.append(
             BriefingItem(
                 section="reporter_signals",
                 headline_ko=f"{post.source_name} 기자 신호",
                 body_ko=f"{post.source_name}는 X에서 '{post.text}'라고 전했습니다.",
+                category=category,
+                category_label_ko=category_label_ko(category),
                 source_count=1,
                 confidence_label="reporter_claim",
                 source_urls=[post.url],
@@ -88,6 +95,7 @@ def _summarize_article(
             "headline_ko": _article_headline(article),
             "body_ko": _article_body(article),
             "confidence_label": "reported",
+            "category": classify_article(article),
         }
 
     summary = article_summarizer(article)
@@ -95,4 +103,5 @@ def _summarize_article(
         "headline_ko": summary["headline_ko"],
         "body_ko": summary["body_ko"],
         "confidence_label": summary.get("confidence_label", "reported"),
+        "category": normalize_category(summary.get("category", classify_article(article))),
     }

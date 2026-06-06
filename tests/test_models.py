@@ -17,15 +17,17 @@ class BriefingPayloadTest(unittest.TestCase):
                 BriefingItem(
                     section="top_stories",
                     headline_ko="중원 보강 후보 재점화",
-                body_ko="아직 협상 단계는 아니지만 체크할 만한 흐름입니다.",
-                source_count=2,
-                confidence_label="reported",
-                source_urls=["https://example.com/news"],
-                source_names=["Liverpool Echo"],
-                source_type="article",
-            )
-        ],
-    )
+                    body_ko="아직 협상 단계는 아니지만 체크할 만한 흐름입니다.",
+                    source_count=2,
+                    confidence_label="reported",
+                    source_urls=["https://example.com/news"],
+                    source_names=["Liverpool Echo"],
+                    source_type="article",
+                    category="transfer",
+                    category_label_ko="이적",
+                )
+            ],
+        )
 
         self.assertEqual(
             payload.to_dict(),
@@ -45,6 +47,8 @@ class BriefingPayloadTest(unittest.TestCase):
                         "source_urls": ["https://example.com/news"],
                         "source_names": ["Liverpool Echo"],
                         "source_type": "article",
+                        "category": "transfer",
+                        "category_label_ko": "이적",
                     }
                 ],
             },

@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from app.categories import normalize_category
 from app.models import Article
 
 
@@ -63,7 +64,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
             "role": "system",
             "content": (
                 "You are a Korean football editor writing for Liverpool fans. "
-                "Return only JSON with keys headline_ko, body_ko, confidence_label. "
+                "Return only JSON with keys headline_ko, body_ko, confidence_label, category. "
                 "Use natural Korean with no awkward English verbs. "
                 "Do not translate proper names for players, clubs, managers, journalists, stadiums, or publications. "
                 "Always keep proper names in original Latin spelling exactly as they appear in the source text. "
@@ -75,7 +76,8 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
                 "Do not add clubs, players, fees, injuries, quotes, or transfer status that are not in the title or body. "
                 "Do not invent transfer fees, dates, injuries, quotes, or negotiation status that are not in the source text. "
                 "If the article is only a report, write it as a report. "
-                "confidence_label must be one of: official, reported, rumor, unconfirmed."
+                "confidence_label must be one of: official, reported, rumor, unconfirmed. "
+                "category must be exactly one of: transfer, injury, match_result, match_preview, team_news, official, rumor, etc."
             ),
         },
         {
@@ -93,6 +95,7 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
         "headline_ko": str(summary["headline_ko"]),
         "body_ko": str(summary["body_ko"]),
         "confidence_label": _normalize_confidence_label(str(summary.get("confidence_label", "reported"))),
+        "category": normalize_category(str(summary.get("category", "etc"))),
     }
 
 

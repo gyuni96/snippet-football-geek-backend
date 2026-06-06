@@ -24,6 +24,7 @@ class GroqTest(unittest.TestCase):
                 "headline_ko": "리버풀, 중원 보강 후보 주시",
                 "body_ko": "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
                 "confidence_label": "reported",
+                "category": "transfer",
             }
         )
 
@@ -35,7 +36,9 @@ class GroqTest(unittest.TestCase):
             "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
         )
         self.assertEqual(summary["confidence_label"], "reported")
+        self.assertEqual(summary["category"], "transfer")
         self.assertIn("Liverpool monitor midfield target", client.messages[1]["content"])
+        self.assertIn("category", client.messages[0]["content"])
         self.assertIn("Do not translate proper names", client.messages[0]["content"])
         self.assertIn("Always keep proper names in original Latin spelling", client.messages[0]["content"])
         self.assertIn("Do not invent transfer fees", client.messages[0]["content"])
@@ -57,12 +60,14 @@ class GroqTest(unittest.TestCase):
                 "headline_ko": "리버풀, 중원 보강 후보 주시",
                 "body_ko": "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
                 "confidence_label": "중",
+                "category": "unknown",
             }
         )
 
         summary = summarize_article_with_groq(article, client)
 
         self.assertEqual(summary["confidence_label"], "reported")
+        self.assertEqual(summary["category"], "etc")
 
     def test_groq_client_builds_chat_completion_request(self):
         captured = {}
@@ -80,6 +85,7 @@ class GroqTest(unittest.TestCase):
                                     "headline_ko": "헤드라인",
                                     "body_ko": "본문",
                                     "confidence_label": "reported",
+                                    "category": "team_news",
                                 },
                                 ensure_ascii=False,
                             )

@@ -53,6 +53,8 @@ class BriefingItem:
     section: str
     headline_ko: str
     body_ko: str
+    category: str
+    category_label_ko: str
     source_count: int
     confidence_label: str
     source_urls: List[str]
@@ -64,6 +66,8 @@ class BriefingItem:
             "section": self.section,
             "headline_ko": self.headline_ko,
             "body_ko": self.body_ko,
+            "category": self.category,
+            "category_label_ko": self.category_label_ko,
             "source_count": self.source_count,
             "confidence_label": self.confidence_label,
             "source_urls": self.source_urls,
