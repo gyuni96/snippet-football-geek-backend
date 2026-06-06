@@ -18,6 +18,8 @@ from app.models import Article, SocialPost
 
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+ARTICLE_BODY_PROMPT_LIMIT = 1200
+SOCIAL_POST_PROMPT_LIMIT = 800
 
 
 HttpPost = Callable[[str, Dict[str, str], Dict[str, Any]], Dict[str, Any]]
@@ -45,6 +47,29 @@ class GroqRateLimiter:
         self.last_request_at = time.monotonic()
 
 
+class GroqUsageGuard:
+    """실행 1회 안에서 Groq 요청량과 일일 토큰 한도 초과 상태를 관리합니다."""
+
+    def __init__(self, max_requests: Optional[int] = None):
+        if max_requests is not None and max_requests <= 0:
+            raise ValueError("max_requests must be positive.")
+        self.max_requests = max_requests
+        self.request_count = 0
+        self.daily_token_limit_reached = False
+
+    def ensure_can_request(self) -> None:
+        if self.daily_token_limit_reached:
+            raise GroqAPIError("Groq daily token limit has been reached; skipping remaining Groq requests.")
+        if self.max_requests is not None and self.request_count >= self.max_requests:
+            raise GroqAPIError("Groq maximum Groq request budget reached; skipping remaining Groq requests.")
+
+    def record_request(self) -> None:
+        self.request_count += 1
+
+    def mark_daily_token_limit_reached(self) -> None:
+        self.daily_token_limit_reached = True
+
+
 class GroqClient:
     def __init__(
         self,
@@ -52,16 +77,22 @@ class GroqClient:
         model: str = DEFAULT_GROQ_MODEL,
         http_post: Optional[HttpPost] = None,
         rate_limiter: Optional[GroqRateLimiter] = None,
+        usage_guard: Optional[GroqUsageGuard] = None,
     ):
         self.api_key = api_key
         self.model = model
         self.http_post = http_post or _http_post_json
         self.rate_limiter = rate_limiter
+        self.usage_guard = usage_guard
 
     def chat_json(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         try:
+            if self.usage_guard is not None:
+                self.usage_guard.ensure_can_request()
             if self.rate_limiter is not None:
                 self.rate_limiter.wait()
+            if self.usage_guard is not None:
+                self.usage_guard.record_request()
             response = self.http_post(
                 GROQ_CHAT_URL,
                 {
@@ -76,7 +107,10 @@ class GroqClient:
                 },
             )
         except HTTPError as error:
-            raise GroqAPIError(_format_http_error(error)) from error
+            message = _format_http_error(error)
+            if self.usage_guard is not None and _is_daily_token_limit_error(message):
+                self.usage_guard.mark_daily_token_limit_reached()
+            raise GroqAPIError(message) from error
         content = response["choices"][0]["message"]["content"]
         return _parse_json_object(content)
 
@@ -100,6 +134,8 @@ def summarize_article_with_groq(article: Article, client: GroqClient) -> Dict[st
             _ensure_article_summary_quality(result)
             return result
         except (GroqAPIError, KeyError, TypeError) as error:
+            if _is_groq_protection_error(error):
+                raise
             last_error = error
 
     raise GroqAPIError("Groq article summary failed after retry.") from last_error
@@ -133,7 +169,7 @@ def _article_summary_messages(article: Article) -> List[Dict[str, str]]:
             "content": (
                 f"Source: {article.source_name}\n"
                 f"Title: {article.title}\n"
-                f"Body: {article.body}\n\n"
+                f"Body: {_trim_prompt_text(article.body, ARTICLE_BODY_PROMPT_LIMIT)}\n\n"
                 "Summarize this as one short Liverpool briefing item in Korean."
             ),
         },
@@ -159,6 +195,8 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
             _ensure_social_post_summary_quality(result)
             return result
         except (GroqAPIError, KeyError, TypeError) as error:
+            if _is_groq_protection_error(error):
+                raise
             last_error = error
 
     raise GroqAPIError("Groq social post summary failed after retry.") from last_error
@@ -187,7 +225,7 @@ def _social_post_summary_messages(post: SocialPost) -> List[Dict[str, str]]:
             "content": (
                 f"Source name: {post.source_name}\n"
                 f"Author handle: {post.author_handle}\n"
-                f"Post text: {post.text}\n\n"
+                f"Post text: {_trim_prompt_text(post.text, SOCIAL_POST_PROMPT_LIMIT)}\n\n"
                 "Rewrite this as one short Liverpool briefing item in Korean."
             ),
         },
@@ -213,7 +251,7 @@ def _article_retry_messages(article: Article) -> List[Dict[str, str]]:
             "role": "user",
             "content": (
                 f"Title: {article.title}\n"
-                f"Body: {article.body[:1600]}\n\n"
+                f"Body: {_trim_prompt_text(article.body, ARTICLE_BODY_PROMPT_LIMIT)}\n\n"
                 "Create one concise Korean briefing item."
             ),
         },
@@ -238,7 +276,7 @@ def _social_post_retry_messages(post: SocialPost) -> List[Dict[str, str]]:
             "role": "user",
             "content": (
                 f"Source: {post.source_name} (@{post.author_handle})\n"
-                f"Post: {post.text[:1200]}\n\n"
+                f"Post: {_trim_prompt_text(post.text, SOCIAL_POST_PROMPT_LIMIT)}\n\n"
                 "Create one Korean briefing item."
             ),
         },
@@ -281,6 +319,31 @@ def _format_http_error(error: HTTPError) -> str:
     except json.JSONDecodeError:
         message = body
     return f"Groq API request failed with status {error.code}: {message}"
+
+
+def _trim_prompt_text(value: str, limit: int) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[:limit].rstrip() + "..."
+
+
+def _is_groq_protection_error(error: Exception) -> bool:
+    message = str(error)
+    return (
+        _is_daily_token_limit_error(message)
+        or "maximum groq request budget" in message.lower()
+        or "daily token limit has been reached" in message.lower()
+    )
+
+
+def _is_daily_token_limit_error(message: str) -> bool:
+    lowered = message.lower()
+    return (
+        "tokens per day" in lowered
+        or "tpd" in lowered
+        or ("type: tokens" in lowered and "rate_limit_exceeded" in lowered)
+    )
 
 
 def _normalize_confidence_label(value: str) -> str:

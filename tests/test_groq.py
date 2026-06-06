@@ -3,7 +3,13 @@ import unittest
 from urllib.error import HTTPError
 from io import BytesIO
 
-from app.groq import GroqAPIError, GroqClient, summarize_article_with_groq, summarize_social_post_with_groq
+from app.groq import (
+    GroqAPIError,
+    GroqClient,
+    GroqUsageGuard,
+    summarize_article_with_groq,
+    summarize_social_post_with_groq,
+)
 from app.models import Article, SocialPost
 from datetime import datetime, timezone
 
@@ -124,6 +130,52 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(summary["headline_ko"], "리버풀, 중원 보강 후보 주시")
         self.assertEqual(len(client.message_calls), 2)
         self.assertIn("specific Korean headline", client.message_calls[1][0]["content"])
+
+    def test_summarize_article_with_groq_does_not_retry_after_daily_token_limit(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Liverpool monitor midfield target",
+            body="Liverpool are watching a midfielder before the summer transfer window.",
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            GroqAPIError(
+                "Groq API request failed with status 429: Rate limit reached on tokens per day (TPD). "
+                "Type: tokens Code: rate_limit_exceeded"
+            )
+        )
+
+        with self.assertRaises(GroqAPIError):
+            summarize_article_with_groq(article, client)
+
+        self.assertEqual(len(client.message_calls), 1)
+
+    def test_summarize_article_with_groq_truncates_long_body_before_request(self):
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool Echo",
+            external_id="article-1",
+            canonical_url="https://example.com/story",
+            title="Liverpool monitor midfield target",
+            body="a" * 5000,
+            published_at=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        )
+        client = FakeGroqClient(
+            {
+                "headline_ko": "리버풀, 중원 보강 후보 주시",
+                "body_ko": "리버풀이 여름 이적시장을 앞두고 중원 보강 후보를 살펴보고 있다는 보도입니다.",
+                "confidence_label": "reported",
+                "category": "transfer",
+            }
+        )
+
+        summarize_article_with_groq(article, client)
+
+        self.assertLess(len(client.messages[1]["content"]), 2200)
+        self.assertNotIn("a" * 3000, client.messages[1]["content"])
 
     def test_summarize_article_with_groq_rejects_mostly_english_summary(self):
         article = Article(
@@ -385,6 +437,65 @@ class GroqTest(unittest.TestCase):
 
         self.assertEqual(calls, ["wait", "post"])
 
+    def test_groq_client_stops_before_http_when_max_requests_reached(self):
+        calls = []
+
+        def fake_http_post(url, headers, body):
+            calls.append("post")
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "headline_ko": "헤드라인",
+                                    "body_ko": "본문",
+                                    "confidence_label": "reported",
+                                    "category": "team_news",
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        guard = GroqUsageGuard(max_requests=1)
+        client = GroqClient(api_key="test-key", model="test-model", http_post=fake_http_post, usage_guard=guard)
+
+        client.chat_json([{"role": "user", "content": "first"}])
+        with self.assertRaises(GroqAPIError) as context:
+            client.chat_json([{"role": "user", "content": "second"}])
+
+        self.assertEqual(calls, ["post"])
+        self.assertIn("maximum Groq request budget", str(context.exception))
+
+    def test_groq_client_marks_daily_token_limit_and_blocks_follow_up_requests(self):
+        calls = []
+
+        def fake_http_post(url, headers, body):
+            calls.append("post")
+            raise HTTPError(
+                url,
+                429,
+                "Too Many Requests",
+                hdrs=None,
+                fp=BytesIO(
+                    b'{"error":{"message":"Rate limit reached on tokens per day (TPD). Type: tokens Code: rate_limit_exceeded"}}'
+                ),
+            )
+
+        guard = GroqUsageGuard(max_requests=10)
+        client = GroqClient(api_key="test-key", model="test-model", http_post=fake_http_post, usage_guard=guard)
+
+        with self.assertRaises(GroqAPIError):
+            client.chat_json([{"role": "user", "content": "first"}])
+        with self.assertRaises(GroqAPIError) as context:
+            client.chat_json([{"role": "user", "content": "second"}])
+
+        self.assertEqual(calls, ["post"])
+        self.assertIn("daily token limit", str(context.exception))
+
     def test_groq_client_converts_http_error_to_safe_error_message(self):
         def fake_http_post(url, headers, body):
             raise HTTPError(
@@ -413,9 +524,10 @@ class FakeGroqClient:
     def chat_json(self, messages):
         self.messages = messages
         self.message_calls.append(messages)
-        if len(self.message_calls) <= len(self.responses):
-            return self.responses[len(self.message_calls) - 1]
-        return self.responses[-1]
+        response = self.responses[len(self.message_calls) - 1] if len(self.message_calls) <= len(self.responses) else self.responses[-1]
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 if __name__ == "__main__":

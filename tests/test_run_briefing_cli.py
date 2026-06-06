@@ -359,9 +359,36 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY)
+        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
+        guard = factory.call_args.kwargs["usage_guard"]
+        self.assertEqual(guard.max_requests, 60)
+        self.assertEqual(guard.request_count, 0)
         self.assertEqual(payload.items[0].headline_ko, "그록 헤드라인")
         self.assertEqual(payload.items[0].body_ko, "그록 요약 본문")
+
+    def test_run_pipeline_uses_configured_groq_max_requests(self):
+        sample_feed_item = _sample_raw_item()
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=[sample_feed_item]):
+            with patch("app.jobs.run_briefing.build_article_summarizer") as factory:
+                factory.return_value = lambda article: {
+                    "headline_ko": "그록 헤드라인",
+                    "body_ko": "그록 요약 본문",
+                    "confidence_label": "reported",
+                }
+                run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo"],
+                    use_groq=True,
+                    groq_api_key="test-key",
+                    groq_model="test-model",
+                    groq_max_requests=12,
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
+        self.assertEqual(factory.call_args.kwargs["usage_guard"].max_requests, 12)
 
     def test_run_pipeline_uses_groq_social_post_summarizer_when_enabled(self):
         x_item = _sample_raw_item(
@@ -391,7 +418,7 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY)
+        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
         self.assertEqual(payload.items[0].headline_ko, "Pearce, 이적 관련 기자 신호")
         self.assertEqual(payload.items[0].body_ko, "James Pearce가 리버풀 이적 관련 흐름을 전했습니다.")
 
@@ -512,6 +539,7 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertIn("--until", completed.stdout)
         self.assertIn("--now", completed.stdout)
         self.assertIn("--groq-requests-per-minute", completed.stdout)
+        self.assertIn("--groq-max-requests", completed.stdout)
 
     def test_resolve_since_text_uses_latest_supabase_briefing_when_saving(self):
         class FakeClient:

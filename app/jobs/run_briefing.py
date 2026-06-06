@@ -32,6 +32,7 @@ from app.groq import (
     DEFAULT_GROQ_MODEL,
     GroqClient,
     GroqRateLimiter,
+    GroqUsageGuard,
     summarize_article_with_groq,
     summarize_social_post_with_groq,
 )
@@ -100,6 +101,12 @@ def main() -> None:
         default=None,
         help="Groq API 요청 속도를 분당 N회로 제한합니다.",
     )
+    parser.add_argument(
+        "--groq-max-requests",
+        type=int,
+        default=None,
+        help="실행 1회에서 허용할 Groq 최대 요청 수입니다. 일일 토큰 한도 보호에 사용합니다.",
+    )
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
     parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
     parser.add_argument("--save-monitoring", action="store_true", help="배치 실행 상태를 Supabase collector_runs에 저장합니다.")
@@ -112,7 +119,10 @@ def main() -> None:
     load_env_file()
     groq_requests_per_minute = args.groq_requests_per_minute
     if groq_requests_per_minute is None:
-        groq_requests_per_minute = int(os.environ.get("GROQ_REQUESTS_PER_MINUTE", "20"))
+        groq_requests_per_minute = int(os.environ.get("GROQ_REQUESTS_PER_MINUTE", "10"))
+    groq_max_requests = args.groq_max_requests
+    if groq_max_requests is None:
+        groq_max_requests = int(os.environ.get("GROQ_MAX_REQUESTS", "60"))
     supabase_client = build_supabase_client_from_env() if args.save_supabase else None
     since_text = resolve_since_text(
         team_slug=args.team,
@@ -143,6 +153,7 @@ def main() -> None:
             groq_api_key=os.environ.get("GROQ_API_KEY"),
             groq_model=args.groq_model,
             groq_requests_per_minute=groq_requests_per_minute,
+            groq_max_requests=groq_max_requests,
             limit=args.limit,
         )
         if args.save_supabase and should_save_payload_to_supabase(payload):
@@ -212,7 +223,8 @@ def run_pipeline(
     use_groq: bool = False,
     groq_api_key: Optional[str] = None,
     groq_model: str = DEFAULT_GROQ_MODEL,
-    groq_requests_per_minute: Optional[int] = 20,
+    groq_requests_per_minute: Optional[int] = 10,
+    groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
 ):
     payload, _diagnostics = run_pipeline_with_diagnostics(
@@ -233,6 +245,7 @@ def run_pipeline(
         groq_api_key=groq_api_key,
         groq_model=groq_model,
         groq_requests_per_minute=groq_requests_per_minute,
+        groq_max_requests=groq_max_requests,
         limit=limit,
     )
     return payload
@@ -255,7 +268,8 @@ def run_pipeline_with_diagnostics(
     use_groq: bool = False,
     groq_api_key: Optional[str] = None,
     groq_model: str = DEFAULT_GROQ_MODEL,
-    groq_requests_per_minute: Optional[int] = 20,
+    groq_requests_per_minute: Optional[int] = 10,
+    groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
 ):
     diagnostics = PipelineDiagnostics()
@@ -305,15 +319,22 @@ def run_pipeline_with_diagnostics(
             if groq_requests_per_minute is not None and groq_requests_per_minute > 0
             else None
         )
+        groq_usage_guard = (
+            GroqUsageGuard(groq_max_requests)
+            if groq_max_requests is not None and groq_max_requests > 0
+            else None
+        )
         article_summarizer = build_article_summarizer(
             api_key=groq_api_key,
             model=groq_model,
             rate_limiter=groq_rate_limiter,
+            usage_guard=groq_usage_guard,
         )
         social_post_summarizer = build_social_post_summarizer(
             api_key=groq_api_key,
             model=groq_model,
             rate_limiter=groq_rate_limiter,
+            usage_guard=groq_usage_guard,
         )
 
     payload = build_briefing_payload(
@@ -486,8 +507,9 @@ def build_article_summarizer(
     api_key: str,
     model: str,
     rate_limiter: Optional[GroqRateLimiter] = None,
+    usage_guard: Optional[GroqUsageGuard] = None,
 ) -> Callable[[Article], dict]:
-    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter)
+    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
     return lambda article: summarize_article_with_groq(article, client)
 
 
@@ -495,8 +517,9 @@ def build_social_post_summarizer(
     api_key: str,
     model: str,
     rate_limiter: Optional[GroqRateLimiter] = None,
+    usage_guard: Optional[GroqUsageGuard] = None,
 ) -> Callable[[SocialPost], dict]:
-    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter)
+    client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
     return lambda post: summarize_social_post_with_groq(post, client)
 
 
