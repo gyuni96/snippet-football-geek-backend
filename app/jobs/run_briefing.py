@@ -1,6 +1,7 @@
 import argparse
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
@@ -11,6 +12,7 @@ from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
 from app.relevance import score_liverpool_relevance
 from app.sources import iter_collectable_sources
+from app.state import load_last_success_at, save_last_success_at
 
 
 def main() -> None:
@@ -28,6 +30,7 @@ def main() -> None:
     )
     parser.add_argument("--since", dest="since_text")
     parser.add_argument("--retention-days", type=int, default=7)
+    parser.add_argument("--state-file")
     args = parser.parse_args()
 
     payload = run_pipeline(
@@ -38,6 +41,7 @@ def main() -> None:
         source_keys=args.source_keys or None,
         since_text=args.since_text,
         retention_days=args.retention_days,
+        state_file=Path(args.state_file) if args.state_file else None,
     )
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
@@ -51,9 +55,13 @@ def run_pipeline(
     since_text: Optional[str] = None,
     retention_days: int = 7,
     now_text: Optional[str] = None,
+    state_file: Optional[Path] = None,
 ):
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
     since = parse_iso_datetime(since_text)
+    if since is None and state_file is not None:
+        since = load_last_success_at(state_file)
+
     raw_items = collect_raw_items(
         team_slug=team_slug,
         rss_url=rss_url,
@@ -74,13 +82,17 @@ def run_pipeline(
         post for post in dedupe_social_posts(social_posts) if score_liverpool_relevance(post) != "low"
     ]
 
-    return build_briefing_payload(
+    payload = build_briefing_payload(
         team_slug=team_slug,
         briefing_type=briefing_type,
         articles=relevant_articles,
         social_posts=relevant_social_posts,
         published_at=now,
     )
+    if state_file is not None:
+        save_last_success_at(state_file, now)
+
+    return payload
 
 
 def collect_raw_items(

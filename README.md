@@ -73,6 +73,17 @@ python3 -m app.jobs.run_briefing \
   --retention-days 7
 ```
 
+로컬 state 파일을 사용하면 마지막 성공 실행 시각을 자동으로 저장하고, 다음 실행부터 그 이후 소식만 처리합니다.
+
+```bash
+python3 -m app.jobs.run_briefing \
+  --team liverpool \
+  --type morning \
+  --source liverpool_echo \
+  --retention-days 7 \
+  --state-file .runtime/liverpool-morning.json
+```
+
 ## 테스트
 
 ```bash

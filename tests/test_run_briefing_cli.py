@@ -1,6 +1,8 @@
 import json
+from pathlib import Path
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -80,6 +82,41 @@ class RunBriefingCliTest(unittest.TestCase):
 
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
         self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
+
+    def test_run_pipeline_uses_state_file_since_and_updates_state(self):
+        fresh_item = _sample_raw_item(
+            external_id="fresh",
+            url="https://example.com/fresh-liverpool-story",
+            published_at="2026-06-06T09:00:00Z",
+        )
+        old_item = _sample_raw_item(
+            external_id="old",
+            url="https://example.com/old-liverpool-story",
+            published_at="2026-06-06T07:00:00Z",
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            state_file = Path(temp_dir) / "state.json"
+            state_file.write_text(
+                json.dumps({"last_success_at": "2026-06-06T08:00:00+00:00"}),
+                encoding="utf-8",
+            )
+
+            with patch("app.jobs.run_briefing.collect_rss_items", return_value=[fresh_item, old_item]):
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo"],
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                    state_file=state_file,
+                )
+
+            saved_state = json.loads(state_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
+        self.assertEqual(saved_state["last_success_at"], "2026-06-06T12:00:00+00:00")
 
 
 def _sample_raw_item(
