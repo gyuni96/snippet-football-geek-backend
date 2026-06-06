@@ -231,6 +231,30 @@ class RunBriefingCliTest(unittest.TestCase):
 
         self.assertEqual(diagnostics.notification_status(), "warning")
 
+    def test_pipeline_diagnostics_reports_warning_when_groq_limit_is_detected(self):
+        sample_feed_item = _sample_raw_item()
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=[sample_feed_item]):
+            with patch("app.jobs.run_briefing.summarize_article_with_groq") as summarize:
+                summarize.side_effect = (
+                    RuntimeError("Groq daily token limit has been reached; skipping remaining Groq requests.")
+                )
+                payload, diagnostics = run_pipeline_with_diagnostics(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo"],
+                    use_groq=True,
+                    groq_api_key="test-key",
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        self.assertEqual(payload.items, [])
+        self.assertEqual(diagnostics.notification_status(), "warning")
+        self.assertEqual(
+            diagnostics.groq_issue_messages,
+            ["Groq daily token limit has been reached; skipping remaining Groq requests."],
+        )
+
     def test_pipeline_diagnostics_reports_failed_when_articles_and_x_fail(self):
         diagnostics = PipelineDiagnostics(
             article_attempted=True,
@@ -359,7 +383,13 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
+        factory.assert_called_once_with(
+            api_key="test-key",
+            model="test-model",
+            rate_limiter=ANY,
+            usage_guard=ANY,
+            diagnostics=ANY,
+        )
         guard = factory.call_args.kwargs["usage_guard"]
         self.assertEqual(guard.max_requests, 60)
         self.assertEqual(guard.request_count, 0)
@@ -387,7 +417,13 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
+        factory.assert_called_once_with(
+            api_key="test-key",
+            model="test-model",
+            rate_limiter=ANY,
+            usage_guard=ANY,
+            diagnostics=ANY,
+        )
         self.assertEqual(factory.call_args.kwargs["usage_guard"].max_requests, 12)
 
     def test_run_pipeline_uses_groq_social_post_summarizer_when_enabled(self):
@@ -418,7 +454,13 @@ class RunBriefingCliTest(unittest.TestCase):
                     now_text="2026-06-06T12:00:00Z",
                 )
 
-        factory.assert_called_once_with(api_key="test-key", model="test-model", rate_limiter=ANY, usage_guard=ANY)
+        factory.assert_called_once_with(
+            api_key="test-key",
+            model="test-model",
+            rate_limiter=ANY,
+            usage_guard=ANY,
+            diagnostics=ANY,
+        )
         self.assertEqual(payload.items[0].headline_ko, "Pearce, 이적 관련 기자 신호")
         self.assertEqual(payload.items[0].body_ko, "James Pearce가 리버풀 이적 관련 흐름을 전했습니다.")
 

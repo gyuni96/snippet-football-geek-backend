@@ -59,8 +59,11 @@ class PipelineDiagnostics:
     x_succeeded: bool = False
     x_failed: bool = False
     x_auth_issue_handles: List[str] = field(default_factory=list)
+    groq_issue_messages: List[str] = field(default_factory=list)
 
     def notification_status(self) -> str:
+        if self.groq_issue_messages:
+            return "warning"
         attempted = []
         if self.article_attempted:
             attempted.append((self.article_succeeded, self.article_failed))
@@ -178,6 +181,7 @@ def main() -> None:
                 status=diagnostics.notification_status(),
                 github_run_url=build_github_run_url_from_env(),
                 x_auth_issue_handles=diagnostics.x_auth_issue_handles,
+                groq_issue_messages=diagnostics.groq_issue_messages,
             )
     except Exception as error:
         if args.save_monitoring:
@@ -329,12 +333,14 @@ def run_pipeline_with_diagnostics(
             model=groq_model,
             rate_limiter=groq_rate_limiter,
             usage_guard=groq_usage_guard,
+            diagnostics=diagnostics,
         )
         social_post_summarizer = build_social_post_summarizer(
             api_key=groq_api_key,
             model=groq_model,
             rate_limiter=groq_rate_limiter,
             usage_guard=groq_usage_guard,
+            diagnostics=diagnostics,
         )
 
     payload = build_briefing_payload(
@@ -508,9 +514,10 @@ def build_article_summarizer(
     model: str,
     rate_limiter: Optional[GroqRateLimiter] = None,
     usage_guard: Optional[GroqUsageGuard] = None,
+    diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> Callable[[Article], dict]:
     client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
-    return lambda article: summarize_article_with_groq(article, client)
+    return lambda article: _summarize_article_with_groq_diagnostics(article, client, diagnostics)
 
 
 def build_social_post_summarizer(
@@ -518,9 +525,49 @@ def build_social_post_summarizer(
     model: str,
     rate_limiter: Optional[GroqRateLimiter] = None,
     usage_guard: Optional[GroqUsageGuard] = None,
+    diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> Callable[[SocialPost], dict]:
     client = GroqClient(api_key=api_key, model=model, rate_limiter=rate_limiter, usage_guard=usage_guard)
-    return lambda post: summarize_social_post_with_groq(post, client)
+    return lambda post: _summarize_social_post_with_groq_diagnostics(post, client, diagnostics)
+
+
+def _summarize_article_with_groq_diagnostics(
+    article: Article,
+    client: GroqClient,
+    diagnostics: Optional[PipelineDiagnostics],
+) -> dict:
+    try:
+        return summarize_article_with_groq(article, client)
+    except RuntimeError as error:
+        _record_groq_issue_if_needed(error, diagnostics)
+        raise
+
+
+def _summarize_social_post_with_groq_diagnostics(
+    post: SocialPost,
+    client: GroqClient,
+    diagnostics: Optional[PipelineDiagnostics],
+) -> dict:
+    try:
+        return summarize_social_post_with_groq(post, client)
+    except RuntimeError as error:
+        _record_groq_issue_if_needed(error, diagnostics)
+        raise
+
+
+def _record_groq_issue_if_needed(error: RuntimeError, diagnostics: Optional[PipelineDiagnostics]) -> None:
+    if diagnostics is None:
+        return
+    message = str(error)
+    lowered = message.lower()
+    if (
+        "daily token limit" in lowered
+        or "tokens per day" in lowered
+        or "tpd" in lowered
+        or "maximum groq request budget" in lowered
+    ):
+        if message not in diagnostics.groq_issue_messages:
+            diagnostics.groq_issue_messages.append(message)
 
 
 def resolve_since_text(
@@ -592,6 +639,7 @@ def notify_discord_run(
     error_message: Optional[str] = None,
     github_run_url: Optional[str] = None,
     x_auth_issue_handles: Optional[List[str]] = None,
+    groq_issue_messages: Optional[List[str]] = None,
 ) -> None:
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook_url:
@@ -608,6 +656,7 @@ def notify_discord_run(
         error_message=error_message,
         github_run_url=github_run_url,
         x_auth_issue_handles=x_auth_issue_handles or [],
+        groq_issue_messages=groq_issue_messages or [],
     )
     try:
         DiscordNotifier(webhook_url=webhook_url).send(message)

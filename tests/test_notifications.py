@@ -91,6 +91,23 @@ class DiscordNotificationTest(unittest.TestCase):
         self.assertEqual(message["embeds"][0]["title"], "⚠️ Liverpool Briefing 부분 수집")
         self.assertEqual(message["embeds"][0]["color"], 0xF1C40F)
 
+    def test_builds_groq_status_field_when_groq_limit_is_detected(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="warning",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+            groq_issue_messages=["Groq daily token limit has been reached; skipping remaining Groq requests."],
+        )
+
+        fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
+        self.assertEqual(
+            fields["⚠️ Groq 상태"],
+            "⚠️ Groq daily token limit has been reached; skipping remaining Groq requests.",
+        )
+
     def test_discord_notifier_posts_json_payload(self):
         requests = []
 

@@ -51,6 +51,7 @@ def build_discord_run_message(
     error_message: Optional[str] = None,
     github_run_url: Optional[str] = None,
     x_auth_issue_handles: Optional[List[str]] = None,
+    groq_issue_messages: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     items = payload.items if payload is not None else []
     article_count = sum(1 for item in items if item.source_type == "article")
@@ -70,6 +71,14 @@ def build_discord_run_message(
     if x_auth_issue_handles:
         handles = ", ".join(f"@{handle}" for handle in x_auth_issue_handles)
         fields.append({"name": "⚠️ X 인증 상태", "value": f"⚠️ 토큰/쿠키 만료 의심: {handles}", "inline": False})
+    if groq_issue_messages:
+        fields.append(
+            {
+                "name": "⚠️ Groq 상태",
+                "value": _trim_discord_field("⚠️ " + "\n".join(dict.fromkeys(groq_issue_messages))),
+                "inline": False,
+            }
+        )
     if error_message:
         fields.append({"name": "오류", "value": _trim_discord_field(error_message), "inline": False})
 
