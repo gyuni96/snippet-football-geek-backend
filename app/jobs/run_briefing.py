@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Tuple
@@ -45,6 +46,11 @@ from app.supabase import (
     save_briefing_payload,
     save_collector_run,
 )
+
+
+@dataclass
+class PipelineDiagnostics:
+    x_auth_issue_handles: List[str] = field(default_factory=list)
 
 
 def main() -> None:
@@ -87,7 +93,7 @@ def main() -> None:
     payload = None
     briefing_id = None
     try:
-        payload = run_pipeline(
+        payload, diagnostics = run_pipeline_with_diagnostics(
             team_slug=args.team,
             briefing_type=args.briefing_type,
             rss_url=args.rss_url,
@@ -125,6 +131,7 @@ def main() -> None:
                 briefing_id=briefing_id,
                 status="success",
                 github_run_url=build_github_run_url_from_env(),
+                x_auth_issue_handles=diagnostics.x_auth_issue_handles,
             )
     except Exception as error:
         if args.save_monitoring:
@@ -171,6 +178,46 @@ def run_pipeline(
     groq_model: str = DEFAULT_GROQ_MODEL,
     limit: Optional[int] = None,
 ):
+    payload, _diagnostics = run_pipeline_with_diagnostics(
+        team_slug=team_slug,
+        briefing_type=briefing_type,
+        rss_url=rss_url,
+        rss_source_name=rss_source_name,
+        source_keys=source_keys,
+        x_provider=x_provider,
+        x_storage_state=x_storage_state,
+        x_cookies_file=x_cookies_file,
+        since_text=since_text,
+        retention_days=retention_days,
+        now_text=now_text,
+        state_file=state_file,
+        use_groq=use_groq,
+        groq_api_key=groq_api_key,
+        groq_model=groq_model,
+        limit=limit,
+    )
+    return payload
+
+
+def run_pipeline_with_diagnostics(
+    team_slug: str,
+    briefing_type: str,
+    rss_url: Optional[str] = None,
+    rss_source_name: str = "RSS Feed",
+    source_keys: Optional[List[str]] = None,
+    x_provider: str = "snscrape",
+    x_storage_state: str = "x_storage_state.json",
+    x_cookies_file: str = "x_cookies.json",
+    since_text: Optional[str] = None,
+    retention_days: int = 7,
+    now_text: Optional[str] = None,
+    state_file: Optional[Path] = None,
+    use_groq: bool = False,
+    groq_api_key: Optional[str] = None,
+    groq_model: str = DEFAULT_GROQ_MODEL,
+    limit: Optional[int] = None,
+):
+    diagnostics = PipelineDiagnostics()
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
     since = parse_iso_datetime(since_text)
     if since is None and state_file is not None:
@@ -184,6 +231,7 @@ def run_pipeline(
         x_provider=x_provider,
         x_storage_state=x_storage_state,
         x_cookies_file=x_cookies_file,
+        diagnostics=diagnostics,
     )
     raw_items = filter_fresh_items(
         raw_items,
@@ -224,7 +272,7 @@ def run_pipeline(
     if state_file is not None:
         save_last_success_at(state_file, now)
 
-    return payload
+    return payload, diagnostics
 
 
 def limit_items(
@@ -255,6 +303,7 @@ def collect_raw_items(
     x_provider: str = "snscrape",
     x_storage_state: str = "x_storage_state.json",
     x_cookies_file: str = "x_cookies.json",
+    diagnostics: Optional[PipelineDiagnostics] = None,
 ) -> List[RawItem]:
     if rss_url:
         return collect_rss_items(
@@ -313,6 +362,8 @@ def collect_raw_items(
                     )
                 )
             except XProfileCollectionError as error:
+                if diagnostics is not None and is_x_auth_issue(str(error)):
+                    diagnostics.x_auth_issue_handles.append(profile.handle)
                 print(
                     f"X collection skipped for @{profile.handle}: {error}",
                     file=sys.stderr,
@@ -320,6 +371,23 @@ def collect_raw_items(
         return raw_items
 
     return sample_raw_items(team_slug)
+
+
+def is_x_auth_issue(error_message: str) -> bool:
+    lowered = error_message.lower()
+    keywords = (
+        "401",
+        "403",
+        "unauthorized",
+        "forbidden",
+        "login",
+        "auth",
+        "cookie",
+        "token",
+        "ct0",
+        "could not authenticate",
+    )
+    return any(keyword in lowered for keyword in keywords)
 
 
 def build_x_post_provider(provider_name: str, storage_state_path: str, cookies_file: str):
@@ -408,6 +476,7 @@ def notify_discord_run(
     status: str,
     error_message: Optional[str] = None,
     github_run_url: Optional[str] = None,
+    x_auth_issue_handles: Optional[List[str]] = None,
 ) -> None:
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook_url:
@@ -423,6 +492,7 @@ def notify_discord_run(
         briefing_id=briefing_id,
         error_message=error_message,
         github_run_url=github_run_url,
+        x_auth_issue_handles=x_auth_issue_handles or [],
     )
     try:
         DiscordNotifier(webhook_url=webhook_url).send(message)

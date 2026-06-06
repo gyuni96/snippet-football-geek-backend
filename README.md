@@ -259,6 +259,7 @@ MVP 저장 구조는 `briefings`와 `briefing_items` 두 테이블입니다. `br
 - Discord 알림을 사용하려면 `DISCORD_WEBHOOK_URL`도 Repository secrets에 등록해야 합니다.
 - 실행 상태는 Supabase `collector_runs` 테이블에 저장합니다.
 - 실행 완료/실패 상태는 Discord webhook으로 전송합니다.
+- X 수집 중 `401`, `403`, `auth_token`, `ct0`, `cookie`, `login` 같은 인증 문제가 감지되면 Discord 알림의 `X 인증 상태` 필드에 토큰/쿠키 만료 의심 계정을 표시합니다.
 - Actions 로그에는 콘솔 JSON도 함께 남습니다.
 
 수동 실행 입력값:
