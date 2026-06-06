@@ -15,6 +15,7 @@ from typing import Callable, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
 from app.collectors.rss import collect_rss_items
+from app.collectors.html_listing import collect_html_listing_items
 from app.collectors.x_profiles import (
     XProfileCollectionError,
     build_playwright_post_provider,
@@ -240,19 +241,38 @@ def collect_raw_items(
     if source_keys:
         raw_items: List[RawItem] = []
         for source in iter_collectable_sources(source_keys):
-            try:
-                raw_items.extend(
-                    collect_rss_items(
-                        feed_url=source.rss_url or "",
-                        team_slug=team_slug,
-                        source_name=source.name,
+            if source.rss_url:
+                try:
+                    raw_items.extend(
+                        collect_rss_items(
+                            feed_url=source.rss_url,
+                            team_slug=team_slug,
+                            source_name=source.name,
+                        )
                     )
-                )
-            except Exception as error:
-                print(
-                    f"RSS collection skipped for {source.key}: {error}",
-                    file=sys.stderr,
-                )
+                except Exception as error:
+                    print(
+                        f"RSS collection skipped for {source.key}: {error}",
+                        file=sys.stderr,
+                    )
+                continue
+
+            listing_url = getattr(source, "listing_url", None)
+            if listing_url:
+                try:
+                    raw_items.extend(
+                        collect_html_listing_items(
+                            listing_url=listing_url,
+                            team_slug=team_slug,
+                            source_name=source.name,
+                            required_terms=getattr(source, "listing_required_terms", ()),
+                        )
+                    )
+                except Exception as error:
+                    print(
+                        f"HTML listing collection skipped for {source.key}: {error}",
+                        file=sys.stderr,
+                    )
         x_post_provider = build_x_post_provider(
             provider_name=x_provider,
             storage_state_path=x_storage_state,

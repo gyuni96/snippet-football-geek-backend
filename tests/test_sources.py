@@ -14,7 +14,13 @@ class SourcesTest(unittest.TestCase):
     def test_liverpool_sources_include_configured_sources(self):
         self.assertEqual(
             sorted(LIVERPOOL_SOURCES.keys()),
-            ["liverpool_echo", "official_website", "this_is_anfield"],
+            [
+                "bbc_sport_liverpool",
+                "liverpool_echo",
+                "official_website",
+                "sky_sports_liverpool",
+                "this_is_anfield",
+            ],
         )
         self.assertEqual(
             get_source("liverpool_echo").rss_url,
@@ -24,12 +30,33 @@ class SourcesTest(unittest.TestCase):
             get_source("this_is_anfield").rss_url,
             "https://www.thisisanfield.com/feed/",
         )
+        self.assertEqual(
+            get_source("official_website").listing_url,
+            "https://www.liverpoolfc.com/news",
+        )
+        self.assertEqual(
+            get_source("sky_sports_liverpool").listing_url,
+            "https://www.skysports.com/liverpool",
+        )
+        self.assertEqual(
+            get_source("bbc_sport_liverpool").listing_url,
+            "https://www.bbc.com/sport/football/teams/liverpool",
+        )
         self.assertIsNone(get_source("official_website").rss_url)
 
-    def test_iter_collectable_sources_skips_sources_without_rss_url(self):
+    def test_iter_collectable_sources_includes_rss_and_listing_sources(self):
         collectable_keys = [source.key for source in iter_collectable_sources(["all"])]
 
-        self.assertEqual(collectable_keys, ["liverpool_echo", "this_is_anfield"])
+        self.assertEqual(
+            collectable_keys,
+            [
+                "official_website",
+                "liverpool_echo",
+                "this_is_anfield",
+                "sky_sports_liverpool",
+                "bbc_sport_liverpool",
+            ],
+        )
 
     def test_liverpool_x_profiles_include_reporter_sources(self):
         self.assertIn("paul_joyce", LIVERPOOL_X_PROFILES)

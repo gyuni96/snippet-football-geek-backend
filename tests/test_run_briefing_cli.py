@@ -76,17 +76,46 @@ class RunBriefingCliTest(unittest.TestCase):
             return []
 
         with patch("app.jobs.run_briefing.collect_rss_items", side_effect=fake_collect_rss_items):
+            with patch("app.jobs.run_briefing.collect_html_listing_items", return_value=[]):
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo", "official_website"],
+                    since_text="2026-06-06T08:00:00Z",
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                )
+
+        self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
+        self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
+
+    def test_run_pipeline_collects_html_listing_source_as_articles(self):
+        listing_item = _sample_raw_item(
+            external_id="official-story",
+            url="https://www.liverpoolfc.com/news/official-liverpool-story",
+            source_type="html_listing",
+            source_name="Liverpool FC Official Website",
+            published_at="2026-06-06T09:00:00Z",
+        )
+
+        with patch("app.jobs.run_briefing.collect_html_listing_items", return_value=[listing_item]) as collector:
             payload = run_pipeline(
                 team_slug="liverpool",
                 briefing_type="morning",
-                source_keys=["liverpool_echo", "official_website"],
-                since_text="2026-06-06T08:00:00Z",
+                source_keys=["official_website"],
                 retention_days=7,
                 now_text="2026-06-06T12:00:00Z",
             )
 
+        collector.assert_called_once_with(
+            listing_url="https://www.liverpoolfc.com/news",
+            team_slug="liverpool",
+            source_name="Liverpool FC Official Website",
+            required_terms=(),
+        )
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
-        self.assertEqual(payload.items[0].source_urls, ["https://example.com/fresh-liverpool-story"])
+        self.assertEqual(payload.items[0].source_type, "article")
+        self.assertEqual(payload.items[0].source_urls, ["https://www.liverpoolfc.com/news/official-liverpool-story"])
 
     def test_run_pipeline_collects_x_profile_sources_as_social_posts(self):
         x_item = _sample_raw_item(
