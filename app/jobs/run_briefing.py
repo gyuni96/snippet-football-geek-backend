@@ -1,9 +1,10 @@
 import argparse
 import json
 from datetime import datetime, timezone
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
+from app.collectors.rss import collect_rss_items
 from app.dedupe import dedupe_articles, dedupe_social_posts
 from app.models import Article, RawItem, SocialPost
 from app.normalizer import normalize_raw_item
@@ -14,14 +15,30 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build a console briefing payload.")
     parser.add_argument("--team", default="liverpool")
     parser.add_argument("--type", default="morning", dest="briefing_type")
+    parser.add_argument("--rss-url")
+    parser.add_argument("--rss-source-name", default="RSS Feed")
     args = parser.parse_args()
 
-    payload = run_pipeline(team_slug=args.team, briefing_type=args.briefing_type)
+    payload = run_pipeline(
+        team_slug=args.team,
+        briefing_type=args.briefing_type,
+        rss_url=args.rss_url,
+        rss_source_name=args.rss_source_name,
+    )
     print(json.dumps(payload.to_dict(), ensure_ascii=False, indent=2))
 
 
-def run_pipeline(team_slug: str, briefing_type: str):
-    raw_items = sample_raw_items(team_slug)
+def run_pipeline(
+    team_slug: str,
+    briefing_type: str,
+    rss_url: Optional[str] = None,
+    rss_source_name: str = "RSS Feed",
+):
+    raw_items = collect_raw_items(
+        team_slug=team_slug,
+        rss_url=rss_url,
+        rss_source_name=rss_source_name,
+    )
     articles, social_posts = normalize_items(raw_items)
     relevant_articles = [
         article for article in dedupe_articles(articles) if score_liverpool_relevance(article) != "low"
@@ -37,6 +54,21 @@ def run_pipeline(team_slug: str, briefing_type: str):
         social_posts=relevant_social_posts,
         published_at=datetime.now(timezone.utc),
     )
+
+
+def collect_raw_items(
+    team_slug: str,
+    rss_url: Optional[str],
+    rss_source_name: str,
+) -> List[RawItem]:
+    if rss_url:
+        return collect_rss_items(
+            feed_url=rss_url,
+            team_slug=team_slug,
+            source_name=rss_source_name,
+        )
+
+    return sample_raw_items(team_slug)
 
 
 def normalize_items(raw_items: Iterable[RawItem]) -> Tuple[List[Article], List[SocialPost]]:
