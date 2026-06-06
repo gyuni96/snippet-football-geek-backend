@@ -1,5 +1,8 @@
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 from types import SimpleNamespace
+from tempfile import TemporaryDirectory
 import unittest
 
 from app.collectors.x_profiles import (
@@ -7,6 +10,7 @@ from app.collectors.x_profiles import (
     XProfilePost,
     build_playwright_post_provider,
     build_snscrape_post_provider,
+    build_twikit_post_provider,
     collect_x_profile_items,
     parse_x_datetime,
 )
@@ -186,6 +190,137 @@ class XProfileCollectorTest(unittest.TestCase):
         self.assertEqual(posts[0].text, "Liverpool are monitoring a transfer target.")
         self.assertEqual(posts[0].url, "https://x.com/JamesPearceLFC/status/123")
         self.assertEqual(posts[0].published_at, datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc))
+
+    def test_twikit_provider_collects_profile_tweets_with_login(self):
+        captured = {}
+        published_at = datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc)
+
+        class FakeTwikitClient:
+            async def login(self, **kwargs):
+                captured["login"] = kwargs
+
+            async def get_user_by_screen_name(self, screen_name):
+                captured["screen_name"] = screen_name
+                return SimpleNamespace(id="user-1")
+
+            async def get_user_tweets(self, user_id, tweet_type, count):
+                captured["user_id"] = user_id
+                captured["tweet_type"] = tweet_type
+                captured["count"] = count
+                return [
+                    SimpleNamespace(
+                        id="123",
+                        text="Liverpool are monitoring a transfer target.",
+                        created_at_datetime=published_at,
+                    )
+                ]
+
+        provider = build_twikit_post_provider(
+            username="collector",
+            email="collector@example.com",
+            password="password",
+            cookies_file="missing_x_cookies.json",
+            max_posts=1,
+            client_factory=FakeTwikitClient,
+        )
+
+        posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(captured["login"]["auth_info_1"], "collector")
+        self.assertEqual(captured["login"]["auth_info_2"], "collector@example.com")
+        self.assertEqual(captured["login"]["password"], "password")
+        self.assertEqual(captured["login"]["cookies_file"], "missing_x_cookies.json")
+        self.assertEqual(captured["screen_name"], "JamesPearceLFC")
+        self.assertEqual(captured["user_id"], "user-1")
+        self.assertEqual(captured["tweet_type"], "Tweets")
+        self.assertEqual(captured["count"], 1)
+        self.assertEqual(posts[0].post_id, "123")
+        self.assertEqual(posts[0].text, "Liverpool are monitoring a transfer target.")
+        self.assertEqual(posts[0].url, "https://x.com/JamesPearceLFC/status/123")
+        self.assertEqual(posts[0].published_at, published_at)
+
+    def test_twikit_provider_supports_legacy_login_signature(self):
+        captured = {}
+        published_at = datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc)
+
+        class FakeLegacyTwikitClient:
+            async def login(self, *, auth_info_1, auth_info_2=None, password):
+                captured["login"] = {
+                    "auth_info_1": auth_info_1,
+                    "auth_info_2": auth_info_2,
+                    "password": password,
+                }
+
+            def save_cookies(self, path):
+                captured["cookies_file"] = path
+
+            async def get_user_by_screen_name(self, screen_name):
+                return SimpleNamespace(id="user-1")
+
+            async def get_user_tweets(self, user_id, tweet_type, count):
+                return [
+                    SimpleNamespace(
+                        id="123",
+                        text="Liverpool are monitoring a transfer target.",
+                        created_at_datetime=published_at,
+                    )
+                ]
+
+        provider = build_twikit_post_provider(
+            username="collector",
+            email="collector@example.com",
+            password="password",
+            cookies_file="missing_x_cookies.json",
+            max_posts=1,
+            client_factory=FakeLegacyTwikitClient,
+        )
+
+        posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(captured["login"]["auth_info_1"], "collector")
+        self.assertEqual(captured["login"]["auth_info_2"], "collector@example.com")
+        self.assertEqual(captured["login"]["password"], "password")
+        self.assertEqual(captured["cookies_file"], "missing_x_cookies.json")
+        self.assertEqual(posts[0].post_id, "123")
+
+    def test_twikit_provider_can_bootstrap_cookie_file_from_tokens(self):
+        captured = {}
+        published_at = datetime(2026, 6, 6, 9, 0, tzinfo=timezone.utc)
+
+        class FakeCookieTwikitClient:
+            def load_cookies(self, path):
+                captured["loaded_cookies"] = json.loads(Path(path).read_text(encoding="utf-8"))
+
+            async def login(self, **kwargs):
+                raise AssertionError("login should not run when cookie tokens are provided")
+
+            async def get_user_by_screen_name(self, screen_name):
+                return SimpleNamespace(id="user-1")
+
+            async def get_user_tweets(self, user_id, tweet_type, count):
+                return [
+                    SimpleNamespace(
+                        id="123",
+                        text="Liverpool are monitoring a transfer target.",
+                        created_at_datetime=published_at,
+                    )
+                ]
+
+        with TemporaryDirectory() as temp_dir:
+            cookies_file = str(Path(temp_dir) / "x_cookies.json")
+            provider = build_twikit_post_provider(
+                auth_token="auth-token",
+                ct0="csrf-token",
+                cookies_file=cookies_file,
+                max_posts=1,
+                client_factory=FakeCookieTwikitClient,
+            )
+
+            posts = provider(get_x_profile("james_pearce"))
+
+        self.assertEqual(captured["loaded_cookies"]["auth_token"], "auth-token")
+        self.assertEqual(captured["loaded_cookies"]["ct0"], "csrf-token")
+        self.assertEqual(posts[0].post_id, "123")
 
 
 if __name__ == "__main__":

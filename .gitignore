@@ -11,5 +11,6 @@ __pycache__/
 venv/
 .runtime/
 x_storage_state.json
+x_cookies.json
 
 docs/

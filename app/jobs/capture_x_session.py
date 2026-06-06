@@ -8,11 +8,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="X 로그인 세션을 storage state 파일로 저장합니다.")
     parser.add_argument("--output", default="x_storage_state.json")
     parser.add_argument("--login-url", default="https://x.com/login")
+    parser.add_argument("--browser-channel", help="예: chrome. Playwright 기본 브라우저 대신 설치된 브라우저 채널을 사용합니다.")
     args = parser.parse_args()
 
     sync_playwright = _load_sync_playwright()
     with sync_playwright as playwright:
-        with playwright.chromium.launch(headless=False) as browser:
+        launch_options = {"headless": False}
+        if args.browser_channel:
+            launch_options["channel"] = args.browser_channel
+        with playwright.chromium.launch(**launch_options) as browser:
             with browser.new_context() as context:
                 page = context.new_page()
                 page.goto(args.login_url, wait_until="domcontentloaded", timeout=60000)

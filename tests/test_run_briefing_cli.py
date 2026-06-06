@@ -123,6 +123,8 @@ class RunBriefingCliTest(unittest.TestCase):
 
         self.assertIn("--x-provider", completed.stdout)
         self.assertIn("--x-storage-state", completed.stdout)
+        self.assertIn("twikit", completed.stdout)
+        self.assertIn("--x-cookies-file", completed.stdout)
 
     def test_run_pipeline_uses_state_file_since_and_updates_state(self):
         fresh_item = _sample_raw_item(
