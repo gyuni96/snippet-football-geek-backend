@@ -42,10 +42,10 @@ def build_briefing_payload(
                 body_ko=article_summary["body_ko"],
                 category=category,
                 category_label_ko=category_label_ko(category),
-                source_count=1,
+                source_count=len(_article_source_names(article)),
                 confidence_label=article_summary["confidence_label"],
-                source_urls=[article.canonical_url],
-                source_names=[article.source_name],
+                source_urls=_article_source_urls(article),
+                source_names=_article_source_names(article),
                 source_type="article",
             )
         )
@@ -86,6 +86,14 @@ def _article_headline(article: Article) -> str:
 
 def _article_body(article: Article) -> str:
     return f"{article.source_name} 보도에 따르면 {article.body}"
+
+
+def _article_source_urls(article: Article) -> List[str]:
+    return article.source_urls or [article.canonical_url]
+
+
+def _article_source_names(article: Article) -> List[str]:
+    return article.source_names or [article.source_name]
 
 
 def _summarize_article(

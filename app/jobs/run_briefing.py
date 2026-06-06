@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
+from app.clustering import cluster_similar_articles
 from app.collectors.rss import collect_rss_items
 from app.collectors.html_listing import collect_html_listing_items
 from app.collectors.x_profiles import (
@@ -171,6 +172,7 @@ def run_pipeline(
     relevant_articles = [
         article for article in dedupe_articles(articles) if score_liverpool_relevance(article) != "low"
     ]
+    relevant_articles = cluster_similar_articles(relevant_articles)
     relevant_social_posts = [
         post for post in dedupe_social_posts(social_posts) if score_liverpool_relevance(post) != "low"
     ]

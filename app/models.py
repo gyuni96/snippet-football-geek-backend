@@ -34,6 +34,8 @@ class Article:
     body: str
     published_at: datetime
     author: Optional[str] = None
+    source_urls: List[str] = field(default_factory=list)
+    source_names: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

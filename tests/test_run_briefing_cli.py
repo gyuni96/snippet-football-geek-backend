@@ -307,14 +307,20 @@ class RunBriefingCliTest(unittest.TestCase):
         first = _sample_raw_item(
             external_id="first",
             url="https://example.com/first-liverpool-story",
+            title="Liverpool monitor midfield target",
+            text="Liverpool are monitoring a midfield target.",
         )
         second = _sample_raw_item(
             external_id="second",
             url="https://example.com/second-liverpool-story",
+            title="Liverpool injury update before derby",
+            text="Liverpool have an injury update before the derby.",
         )
         third = _sample_raw_item(
             external_id="third",
             url="https://example.com/third-liverpool-story",
+            title="Liverpool academy prospect signs contract",
+            text="Liverpool academy prospect signs a new contract.",
         )
         summarized_urls = []
 
@@ -354,6 +360,20 @@ class RunBriefingCliTest(unittest.TestCase):
             _sample_raw_item(
                 external_id=f"article-{index}",
                 url=f"https://example.com/article-{index}",
+                title=[
+                    "Liverpool monitor midfield target",
+                    "Liverpool injury update before derby",
+                    "Liverpool academy prospect signs contract",
+                    "Liverpool prepare Anfield ticket update",
+                    "Liverpool goal of season shortlist revealed",
+                ][index],
+                text=[
+                    "Liverpool are monitoring a midfield target.",
+                    "Liverpool have an injury update before the derby.",
+                    "Liverpool academy prospect signs a new contract.",
+                    "Liverpool prepare an Anfield ticket update.",
+                    "Liverpool reveal goal of the season shortlist.",
+                ][index],
             )
             for index in range(5)
         ]
@@ -460,6 +480,8 @@ def _sample_raw_item(
     source_type="rss",
     source_name="Example RSS",
     author=None,
+    title="Liverpool transfer update",
+    text="Liverpool are monitoring a transfer target.",
 ):
     from datetime import datetime, timezone
 
@@ -473,8 +495,8 @@ def _sample_raw_item(
         source_name=source_name,
         external_id=external_id,
         url=url,
-        title="Liverpool transfer update",
-        text="Liverpool are monitoring a transfer target.",
+        title=title,
+        text=text,
         published_at=parsed,
         author=author,
     )

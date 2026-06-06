@@ -119,6 +119,44 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
 
+    def test_builds_article_item_with_multiple_sources(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        article = Article(
+            team_slug="liverpool",
+            source_name="Liverpool FC Official Website",
+            external_id="article-1",
+            canonical_url="https://www.liverpoolfc.com/news/iraola",
+            title="Liverpool appoint Andoni Iraola",
+            body="Liverpool have appointed Andoni Iraola.",
+            published_at=published_at,
+            source_urls=[
+                "https://www.liverpoolfc.com/news/iraola",
+                "https://www.skysports.com/football/news/iraola-liverpool",
+            ],
+            source_names=["Liverpool FC Official Website", "Sky Sports - Liverpool"],
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[article],
+            social_posts=[],
+            published_at=published_at,
+        )
+
+        self.assertEqual(payload.items[0].source_count, 2)
+        self.assertEqual(
+            payload.items[0].source_names,
+            ["Liverpool FC Official Website", "Sky Sports - Liverpool"],
+        )
+        self.assertEqual(
+            payload.items[0].source_urls,
+            [
+                "https://www.liverpoolfc.com/news/iraola",
+                "https://www.skysports.com/football/news/iraola-liverpool",
+            ],
+        )
+
     def test_builds_afternoon_briefing_title(self):
         published_at = datetime(2026, 6, 6, 16, 0, tzinfo=timezone.utc)
 
