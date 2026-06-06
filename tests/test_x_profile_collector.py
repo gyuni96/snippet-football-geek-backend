@@ -354,6 +354,39 @@ class XProfileCollectorTest(unittest.TestCase):
 
         self.assertEqual(posts[0].post_id, "123")
 
+    def test_twikit_legacy_patch_adds_missing_user_url_fields(self):
+        from app.collectors.x_profiles import _patch_twikit_legacy_defaults
+
+        _patch_twikit_legacy_defaults()
+
+        import twikit.user
+
+        user = twikit.user.User(
+            client=SimpleNamespace(),
+            data={
+                "rest_id": "user-1",
+                "is_blue_verified": False,
+                "legacy": {
+                    "created_at": "Sat Jun 06 09:00:00 +0000 2026",
+                    "name": "LFCTransferRoom",
+                    "screen_name": "LFCTransferRoom",
+                    "profile_image_url_https": "https://example.com/avatar.jpg",
+                    "location": "",
+                    "description": "Liverpool transfer news",
+                    "entities": {},
+                    "verified": False,
+                    "followers_count": 1,
+                    "friends_count": 1,
+                    "favourites_count": 1,
+                    "listed_count": 0,
+                    "statuses_count": 1,
+                },
+            },
+        )
+
+        self.assertEqual(user.description_urls, [])
+        self.assertEqual(user.urls, [])
+
     def test_twikit_provider_reads_created_at_from_raw_tweet_data(self):
         class FakeTwikitClient:
             def load_cookies(self, path):

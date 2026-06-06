@@ -211,6 +211,9 @@ def _patch_twikit_legacy_defaults() -> None:
             legacy.setdefault("media_count", 0)
             legacy.setdefault("is_translator", False)
             legacy.setdefault("translator_type", "")
+            entities = legacy.setdefault("entities", {})
+            entities.setdefault("description", {}).setdefault("urls", [])
+            entities.setdefault("url", {}).setdefault("urls", [])
             return original_user_init(self, client, data)
 
         user_module.User.__init__ = patched_user_init

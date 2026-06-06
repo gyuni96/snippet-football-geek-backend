@@ -41,16 +41,6 @@ LIVERPOOL_SOURCES: Dict[str, SourceConfig] = {
         rss_url=None,
         description="리버풀 FC의 공식 홈페이지로 공식 성명, 매치 리포트 및 오피셜 소식을 제공합니다.",
     ),
-    "bbc_sport": SourceConfig(
-        key="bbc_sport",
-        name="BBC Sport - Liverpool",
-        website_url="https://www.bbc.co.uk/sport/football/teams/liverpool",
-        rss_url="https://newsrss.bbc.co.uk/rss/sportonline_world_edition/football/rss.xml",
-        description=(
-            "BBC의 리버풀 전용 섹션입니다. 제공되는 RSS는 축구 전체 피드이며, "
-            "리버풀 전용 뉴스만 골라보려면 커스텀 RSS 생성기 활용을 고려합니다."
-        ),
-    ),
 }
 
 
@@ -61,6 +51,20 @@ LIVERPOOL_X_PROFILES: Dict[str, XProfileConfig] = {
         handle="JamesPearceLFC",
         profile_url="https://x.com/JamesPearceLFC",
         description="리버풀 담당 기자로 팀 내부 소식과 기자 신호를 추적합니다.",
+    ),
+    "fabrizio_romano": XProfileConfig(
+        key="fabrizio_romano",
+        name="Fabrizio Romano",
+        handle="FabrizioRomano",
+        profile_url="https://x.com/FabrizioRomano",
+        description="이적 시장 전문가로, 리버풀과 관련된 이적 뉴스와 루머를 신속하게 보도합니다.",
+    ),
+    "lfc_transfer_room": XProfileConfig(
+        key="lfc_transfer_room",
+        name="LFCTransferRoom",
+        handle="LFCTransferRoom",
+        profile_url="https://x.com/LFCTransferRoom",
+        description="리버풀 이적 시장 소식을 전문적으로 다루는 계정으로, 루머와 확인된 이적 뉴스를 제공합니다.",
     ),
 }
 

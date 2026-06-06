@@ -16,7 +16,6 @@ LIVERPOOL_TERMS = (
     "the reds",
     "reds",
     "anfield",
-    "arne slot",
 )
 
 
