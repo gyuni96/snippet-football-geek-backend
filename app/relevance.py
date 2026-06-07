@@ -8,6 +8,7 @@
 from typing import Union
 
 from app.models import Article, SocialPost
+from app.team_config import load_liverpool_team_config
 
 
 LIVERPOOL_TERMS = (
@@ -18,14 +19,21 @@ LIVERPOOL_TERMS = (
     "anfield",
 )
 
+_TEAM_CONFIG = load_liverpool_team_config()
+LIVERPOOL_SUBJECT_TERMS = _TEAM_CONFIG.liverpool_subject_terms
+WOMENS_TEAM_TERMS = _TEAM_CONFIG.womens_team_terms
+
 
 def score_liverpool_relevance(item: Union[Article, SocialPost]) -> str:
     if isinstance(item, Article):
-        haystack = f"{item.title} {item.body} {item.source_name}".lower()
+        haystack = f"{item.title} {item.body}".lower()
     else:
-        haystack = f"{item.text} {item.source_name} {item.author_handle}".lower()
+        haystack = item.text.lower()
 
-    matches = sum(1 for term in LIVERPOOL_TERMS if term in haystack)
+    if any(term in haystack for term in WOMENS_TEAM_TERMS):
+        return "low"
+
+    matches = sum(1 for term in LIVERPOOL_TERMS + LIVERPOOL_SUBJECT_TERMS if term in haystack)
     if matches >= 1:
         return "high"
 

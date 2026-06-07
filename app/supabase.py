@@ -147,6 +147,8 @@ def _briefing_item_row(briefing_id: str, sort_order: int, item: Dict[str, Any]) 
         "source_count": item["source_count"],
         "source_urls": item["source_urls"],
         "source_names": item["source_names"],
+        "published_at": item["published_at"],
+        "event_at": item["event_at"],
     }
 
 

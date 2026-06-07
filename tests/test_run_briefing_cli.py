@@ -127,6 +127,10 @@ class RunBriefingCliTest(unittest.TestCase):
                 "competition",
                 "win-liverpool-shirt",
                 "season-player-review",
+                "women",
+                "women's",
+                "lfc-women",
+                "lfc women",
             ),
         )
         self.assertEqual(payload.summary_ko, "출근길에 확인할 리버풀 핵심 소식 1건입니다.")
@@ -536,7 +540,7 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(diagnostics.groq_current_model, "fallback-a")
         self.assertEqual(
             diagnostics.groq_issue_messages,
-            ["Groq model fallback: test-model -> fallback-a (daily token limit reached)."],
+            ["test-model 일일 토큰 한도 초과로 fallback-a 모델로 전환했습니다."],
         )
 
     def test_run_pipeline_limits_relevant_items_before_groq_summarization(self):
@@ -637,6 +641,139 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertEqual(payload.items[-1].source_type, "social_post")
         self.assertEqual(payload.items[-1].source_urls, ["https://x.com/JamesPearceLFC/status/post-1"])
 
+    def test_run_pipeline_supports_type_specific_limits(self):
+        article_items = [
+            _sample_raw_item(
+                external_id=f"article-{index}",
+                url=f"https://example.com/article-{index}",
+                published_at=f"2026-06-06T0{6 + index}:00:00Z",
+                title=[
+                    "Liverpool monitor midfield transfer target",
+                    "Liverpool injury update before derby",
+                    "Liverpool academy prospect signs contract",
+                    "Liverpool prepare Anfield ticket update",
+                ][index],
+                text=[
+                    "Liverpool are monitoring a midfield transfer target.",
+                    "Liverpool have an injury update before the derby.",
+                    "Liverpool academy prospect signs a new contract.",
+                    "Liverpool prepare an Anfield ticket update.",
+                ][index],
+            )
+            for index in range(4)
+        ]
+        x_items = [
+            _sample_raw_item(
+                external_id=f"post-{index}",
+                url=f"https://x.com/JamesPearceLFC/status/post-{index}",
+                published_at=f"2026-06-06T0{6 + index}:30:00Z",
+                source_type="x_profile",
+                source_name="James Pearce",
+                author="JamesPearceLFC",
+                title=f"Liverpool post {index}",
+                text=f"Liverpool post body {index}.",
+            )
+            for index in range(4)
+        ]
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=article_items):
+            with patch("app.jobs.run_briefing.collect_x_profile_items", return_value=x_items):
+                payload = run_pipeline(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo", "x_reporters"],
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                    article_limit=2,
+                    social_post_limit=3,
+                )
+
+        article_count = sum(1 for item in payload.items if item.source_type == "article")
+        social_post_count = sum(1 for item in payload.items if item.source_type == "social_post")
+        self.assertEqual(article_count, 2)
+        self.assertEqual(social_post_count, 3)
+        self.assertEqual(
+            [item.source_urls[0] for item in payload.items if item.source_type == "article"],
+            ["https://example.com/article-3", "https://example.com/article-2"],
+        )
+        self.assertEqual(
+            [item.source_urls[0] for item in payload.items if item.source_type == "social_post"],
+            [
+                "https://x.com/JamesPearceLFC/status/post-3",
+                "https://x.com/JamesPearceLFC/status/post-2",
+                "https://x.com/JamesPearceLFC/status/post-1",
+            ],
+        )
+
+    def test_run_pipeline_overfetches_type_limit_and_caps_final_output_after_quality_filter(self):
+        article_items = [
+            _sample_raw_item(
+                external_id=f"article-{index}",
+                url=f"https://example.com/article-{index}",
+                published_at=f"2026-06-06T0{6 + index}:00:00Z",
+                title=[
+                    "Liverpool Arne Slot press notes",
+                    "Liverpool Anfield ticket details",
+                    "Liverpool Alisson injury scan",
+                    "Liverpool Federico Chiesa transfer latest",
+                ][index],
+                text=[
+                    "Liverpool and Arne Slot held a press conference.",
+                    "Liverpool shared Anfield ticket details.",
+                    "Liverpool are waiting on Alisson injury scan results.",
+                    "Liverpool have a Federico Chiesa transfer update.",
+                ][index],
+            )
+            for index in range(4)
+        ]
+        summarized_urls = []
+
+        with patch("app.jobs.run_briefing.collect_rss_items", return_value=article_items):
+            with patch("app.jobs.run_briefing.build_article_summarizer") as factory:
+                def fake_summarizer(article):
+                    summarized_urls.append(article.canonical_url)
+                    if article.external_id == "article-3":
+                        return {
+                            "headline_ko": "리버풀 관련 소식",
+                            "body_ko": "Liverpool Echo가 관련 소식을 전했습니다.",
+                            "confidence_label": "reported",
+                            "category": "transfer",
+                        }
+                    return {
+                        "headline_ko": f"요약 {article.external_id}",
+                        "body_ko": "실제 내용을 바탕으로 한 리버풀 요약입니다.",
+                        "confidence_label": "reported",
+                        "category": "transfer",
+                    }
+
+                factory.return_value = fake_summarizer
+                payload, diagnostics = run_pipeline_with_diagnostics(
+                    team_slug="liverpool",
+                    briefing_type="morning",
+                    source_keys=["liverpool_echo"],
+                    retention_days=7,
+                    now_text="2026-06-06T12:00:00Z",
+                    use_groq=True,
+                    groq_api_key="test-key",
+                    groq_model="test-model",
+                    article_limit=2,
+                )
+
+        self.assertEqual([item.headline_ko for item in payload.items], ["요약 article-2", "요약 article-1"])
+        self.assertEqual(
+            summarized_urls,
+            [
+                "https://example.com/article-3",
+                "https://example.com/article-2",
+                "https://example.com/article-1",
+            ],
+        )
+        self.assertEqual(diagnostics.raw_item_count, 4)
+        self.assertEqual(diagnostics.fresh_item_count, 4)
+        self.assertEqual(diagnostics.relevant_article_count, 4)
+        self.assertEqual(diagnostics.article_candidate_count, 4)
+        self.assertEqual(diagnostics.article_output_count, 2)
+
     def test_cli_supports_save_supabase_option(self):
         completed = subprocess.run(
             [
@@ -658,6 +795,9 @@ class RunBriefingCliTest(unittest.TestCase):
         self.assertIn("--groq-requests-per-minute", completed.stdout)
         self.assertIn("--groq-max-requests", completed.stdout)
         self.assertIn("--groq-fallback-model", completed.stdout)
+        self.assertIn("--article-limit", completed.stdout)
+        self.assertIn("--social-post-limit", completed.stdout)
+        self.assertIn("--overfetch-factor", completed.stdout)
 
     def test_resolve_since_text_uses_latest_supabase_briefing_when_saving(self):
         class FakeClient:

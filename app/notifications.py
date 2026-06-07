@@ -55,6 +55,7 @@ def build_discord_run_message(
     groq_primary_model: Optional[str] = None,
     groq_current_model: Optional[str] = None,
     groq_fallback_models: Optional[List[str]] = None,
+    collection_counts: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     items = payload.items if payload is not None else []
     article_count = sum(1 for item in items if item.source_type == "article")
@@ -78,14 +79,18 @@ def build_discord_run_message(
     )
     if groq_model_field:
         fields.append({"name": "🤖 Groq 모델", "value": groq_model_field, "inline": False})
+    collection_debug_field = _build_collection_debug_field(collection_counts or {})
+    if collection_debug_field:
+        fields.append({"name": "📊 수집 흐름", "value": collection_debug_field, "inline": False})
     if x_auth_issue_handles:
         handles = ", ".join(f"@{handle}" for handle in x_auth_issue_handles)
         fields.append({"name": "⚠️ X 인증 상태", "value": f"⚠️ 토큰/쿠키 만료 의심: {handles}", "inline": False})
     if groq_issue_messages:
+        messages = [_humanize_groq_issue_message(message) for message in dict.fromkeys(groq_issue_messages)]
         fields.append(
             {
                 "name": "⚠️ Groq 상태",
-                "value": _trim_discord_field("⚠️ " + "\n".join(dict.fromkeys(groq_issue_messages))),
+                "value": _trim_discord_field("⚠️ " + "\n".join(messages)),
                 "inline": False,
             }
         )
@@ -119,6 +124,41 @@ def _build_groq_model_field(
     if fallback_models:
         lines.append(f"fallback: {', '.join(fallback_models)}")
     return _trim_discord_field("\n".join(lines))
+
+
+def _build_collection_debug_field(collection_counts: Dict[str, int]) -> Optional[str]:
+    if not collection_counts:
+        return None
+    article_candidate_count = collection_counts.get("article_candidate_count", 0)
+    social_post_candidate_count = collection_counts.get("social_post_candidate_count", 0)
+    article_output_count = collection_counts.get("article_output_count", 0)
+    social_post_output_count = collection_counts.get("social_post_output_count", 0)
+    article_unused_count = max(article_candidate_count - article_output_count, 0)
+    social_post_unused_count = max(social_post_candidate_count - social_post_output_count, 0)
+    return _trim_discord_field(
+        "\n".join(
+            [
+                f"원본 {collection_counts.get('raw_item_count', 0)}개 → 최신 {collection_counts.get('fresh_item_count', 0)}개",
+                (
+                    "관련성 통과: "
+                    f"기사 {collection_counts.get('relevant_article_count', 0)}개 / "
+                    f"X {collection_counts.get('relevant_social_post_count', 0)}개"
+                ),
+                f"요약 후보: 기사 {article_candidate_count}개 / X {social_post_candidate_count}개",
+                f"저장 대상: 기사 {article_output_count}개 / X {social_post_output_count}개",
+                f"제외/미사용: 기사 {article_unused_count}개 / X {social_post_unused_count}개",
+            ]
+        )
+    )
+
+
+def _humanize_groq_issue_message(message: str) -> str:
+    lowered = message.lower()
+    if "daily token limit has been reached" in lowered:
+        return "Groq 일일 토큰 한도 초과로 남은 요약 요청을 건너뜁니다."
+    if "maximum groq request budget" in lowered:
+        return "실행 1회 Groq 요청 예산을 사용해 남은 요약 요청을 건너뜁니다."
+    return message
 
 
 def _trim_discord_field(value: str) -> str:

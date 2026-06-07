@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from app.briefing_builder import build_briefing_payload
 from app.clustering import cluster_similar_articles
@@ -65,6 +65,16 @@ class PipelineDiagnostics:
     groq_primary_model: Optional[str] = None
     groq_current_model: Optional[str] = None
     groq_fallback_models: List[str] = field(default_factory=list)
+    raw_item_count: int = 0
+    fresh_item_count: int = 0
+    normalized_article_count: int = 0
+    normalized_social_post_count: int = 0
+    relevant_article_count: int = 0
+    relevant_social_post_count: int = 0
+    article_candidate_count: int = 0
+    social_post_candidate_count: int = 0
+    article_output_count: int = 0
+    social_post_output_count: int = 0
 
     def notification_status(self) -> str:
         if self.groq_issue_messages:
@@ -92,6 +102,25 @@ class PipelineDiagnostics:
     def record_groq_issue(self, message: str) -> None:
         if message not in self.groq_issue_messages:
             self.groq_issue_messages.append(message)
+
+    def record_payload_counts(self, payload) -> None:
+        items = payload.items if payload is not None else []
+        self.article_output_count = sum(1 for item in items if item.source_type == "article")
+        self.social_post_output_count = sum(1 for item in items if item.source_type == "social_post")
+
+    def to_collection_counts(self) -> Dict[str, int]:
+        return {
+            "raw_item_count": self.raw_item_count,
+            "fresh_item_count": self.fresh_item_count,
+            "normalized_article_count": self.normalized_article_count,
+            "normalized_social_post_count": self.normalized_social_post_count,
+            "relevant_article_count": self.relevant_article_count,
+            "relevant_social_post_count": self.relevant_social_post_count,
+            "article_candidate_count": self.article_candidate_count,
+            "social_post_candidate_count": self.social_post_candidate_count,
+            "article_output_count": self.article_output_count,
+            "social_post_output_count": self.social_post_output_count,
+        }
 
 
 def main() -> None:
@@ -134,6 +163,13 @@ def main() -> None:
         help="실행 1회에서 허용할 Groq 최대 요청 수입니다. 일일 토큰 한도 보호에 사용합니다.",
     )
     parser.add_argument("--limit", type=int, help="필터링 이후 처리할 브리핑 항목 수를 제한합니다. Groq 테스트에 유용합니다.")
+    parser.add_argument("--article-limit", type=int, help="필터링 이후 처리할 기사 항목 수를 제한합니다.")
+    parser.add_argument("--social-post-limit", type=int, help="필터링 이후 처리할 X 게시물 항목 수를 제한합니다.")
+    parser.add_argument(
+        "--overfetch-factor",
+        type=int,
+        help="타입별 제한보다 몇 배 많은 후보를 요약 단계에 넘길지 정합니다.",
+    )
     parser.add_argument("--save-supabase", action="store_true", help="생성된 브리핑 payload를 Supabase에 저장합니다.")
     parser.add_argument("--save-monitoring", action="store_true", help="배치 실행 상태를 Supabase collector_runs에 저장합니다.")
     parser.add_argument("--notify-discord", action="store_true", help="배치 실행 완료/실패 상태를 Discord webhook으로 전송합니다.")
@@ -149,6 +185,9 @@ def main() -> None:
     groq_max_requests = args.groq_max_requests
     if groq_max_requests is None:
         groq_max_requests = int(os.environ.get("GROQ_MAX_REQUESTS", "60"))
+    overfetch_factor = args.overfetch_factor
+    if overfetch_factor is None:
+        overfetch_factor = int(os.environ.get("COLLECTION_OVERFETCH_FACTOR", "3"))
     groq_fallback_models = args.groq_fallback_models or _parse_groq_fallback_models(
         os.environ.get("GROQ_FALLBACK_MODELS")
     )
@@ -185,6 +224,9 @@ def main() -> None:
             groq_requests_per_minute=groq_requests_per_minute,
             groq_max_requests=groq_max_requests,
             limit=args.limit,
+            article_limit=args.article_limit,
+            social_post_limit=args.social_post_limit,
+            overfetch_factor=overfetch_factor,
         )
         if args.save_supabase and should_save_payload_to_supabase(payload):
             briefing_id = save_payload_to_supabase(payload, client=supabase_client)
@@ -212,6 +254,7 @@ def main() -> None:
                 groq_primary_model=diagnostics.groq_primary_model,
                 groq_current_model=diagnostics.groq_current_model,
                 groq_fallback_models=diagnostics.groq_fallback_models,
+                collection_counts=diagnostics.to_collection_counts(),
             )
     except Exception as error:
         if args.save_monitoring:
@@ -261,6 +304,9 @@ def run_pipeline(
     groq_requests_per_minute: Optional[int] = 10,
     groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
+    article_limit: Optional[int] = None,
+    social_post_limit: Optional[int] = None,
+    overfetch_factor: int = 3,
 ):
     payload, _diagnostics = run_pipeline_with_diagnostics(
         team_slug=team_slug,
@@ -283,6 +329,9 @@ def run_pipeline(
         groq_requests_per_minute=groq_requests_per_minute,
         groq_max_requests=groq_max_requests,
         limit=limit,
+        article_limit=article_limit,
+        social_post_limit=social_post_limit,
+        overfetch_factor=overfetch_factor,
     )
     return payload
 
@@ -308,6 +357,9 @@ def run_pipeline_with_diagnostics(
     groq_requests_per_minute: Optional[int] = 10,
     groq_max_requests: Optional[int] = 60,
     limit: Optional[int] = None,
+    article_limit: Optional[int] = None,
+    social_post_limit: Optional[int] = None,
+    overfetch_factor: int = 3,
 ):
     diagnostics = PipelineDiagnostics()
     now = parse_iso_datetime(now_text) or datetime.now(timezone.utc)
@@ -326,6 +378,7 @@ def run_pipeline_with_diagnostics(
         x_cookies_file=x_cookies_file,
         diagnostics=diagnostics,
     )
+    diagnostics.raw_item_count = len(raw_items)
     raw_items = filter_fresh_items(
         raw_items,
         since=since,
@@ -333,7 +386,10 @@ def run_pipeline_with_diagnostics(
         now=now,
         until=until,
     )
+    diagnostics.fresh_item_count = len(raw_items)
     articles, social_posts = normalize_items(raw_items)
+    diagnostics.normalized_article_count = len(articles)
+    diagnostics.normalized_social_post_count = len(social_posts)
     relevant_articles = [
         article for article in dedupe_articles(articles) if score_liverpool_relevance(article) != "low"
     ]
@@ -341,11 +397,18 @@ def run_pipeline_with_diagnostics(
     relevant_social_posts = [
         post for post in dedupe_social_posts(social_posts) if score_liverpool_relevance(post) != "low"
     ]
+    diagnostics.relevant_article_count = len(relevant_articles)
+    diagnostics.relevant_social_post_count = len(relevant_social_posts)
     relevant_articles, relevant_social_posts = limit_items(
         relevant_articles,
         relevant_social_posts,
         limit=limit,
+        article_limit=article_limit,
+        social_post_limit=social_post_limit,
+        overfetch_factor=overfetch_factor,
     )
+    diagnostics.article_candidate_count = len(relevant_articles)
+    diagnostics.social_post_candidate_count = len(relevant_social_posts)
     article_summarizer = None
     social_post_summarizer = None
     if use_groq:
@@ -397,7 +460,10 @@ def run_pipeline_with_diagnostics(
         published_at=now,
         article_summarizer=article_summarizer,
         social_post_summarizer=social_post_summarizer,
+        article_output_limit=article_limit,
+        social_post_output_limit=social_post_limit,
     )
+    diagnostics.record_payload_counts(payload)
     if state_file is not None:
         save_last_success_at(state_file, now)
 
@@ -408,7 +474,16 @@ def limit_items(
     articles: List[Article],
     social_posts: List[SocialPost],
     limit: Optional[int],
+    article_limit: Optional[int] = None,
+    social_post_limit: Optional[int] = None,
+    overfetch_factor: int = 3,
 ) -> Tuple[List[Article], List[SocialPost]]:
+    articles = sorted(articles, key=lambda article: article.published_at, reverse=True)
+    social_posts = sorted(social_posts, key=lambda post: post.published_at, reverse=True)
+    if article_limit is not None:
+        articles = articles[: _candidate_limit(article_limit, overfetch_factor)]
+    if social_post_limit is not None:
+        social_posts = social_posts[: _candidate_limit(social_post_limit, overfetch_factor)]
     if limit is None:
         return articles, social_posts
     if limit <= 0:
@@ -422,6 +497,12 @@ def limit_items(
     remaining = limit - len(limited_articles)
     limited_social_posts = social_posts[:remaining] if remaining > 0 else []
     return limited_articles, limited_social_posts
+
+
+def _candidate_limit(output_limit: int, overfetch_factor: int) -> int:
+    if output_limit <= 0:
+        return 0
+    return output_limit * max(overfetch_factor, 1)
 
 
 def collect_raw_items(
@@ -710,6 +791,7 @@ def notify_discord_run(
     groq_primary_model: Optional[str] = None,
     groq_current_model: Optional[str] = None,
     groq_fallback_models: Optional[List[str]] = None,
+    collection_counts: Optional[Dict[str, int]] = None,
 ) -> None:
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook_url:
@@ -730,6 +812,7 @@ def notify_discord_run(
         groq_primary_model=groq_primary_model,
         groq_current_model=groq_current_model,
         groq_fallback_models=groq_fallback_models or [],
+        collection_counts=collection_counts,
     )
     try:
         DiscordNotifier(webhook_url=webhook_url).send(message)

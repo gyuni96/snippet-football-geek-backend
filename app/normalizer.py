@@ -35,4 +35,5 @@ def normalize_raw_item(raw_item: RawItem) -> NormalizedItem:
         body=raw_item.text,
         published_at=raw_item.published_at,
         author=raw_item.author,
+        event_at=raw_item.event_at,
     )

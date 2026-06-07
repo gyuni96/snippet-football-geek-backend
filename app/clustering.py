@@ -108,6 +108,7 @@ def _merge_article_cluster(cluster: List[Article]) -> Article:
     if len(cluster) == 1:
         return replace(
             representative,
+            event_at=_cluster_event_at(cluster, representative),
             source_urls=representative.source_urls or source_urls,
             source_names=representative.source_names or source_names,
         )
@@ -124,9 +125,19 @@ def _merge_article_cluster(cluster: List[Article]) -> Article:
     return replace(
         representative,
         body=merged_body,
+        event_at=_cluster_event_at(cluster, representative),
         source_urls=source_urls,
         source_names=source_names,
     )
+
+
+def _cluster_event_at(cluster: List[Article], representative: Article):
+    if representative.event_at is not None:
+        return representative.event_at
+    for article in cluster:
+        if article.event_at is not None:
+            return article.event_at
+    return None
 
 
 def _normalize_title(title: str) -> str:

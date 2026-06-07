@@ -30,19 +30,25 @@ def build_briefing_payload(
     published_at: datetime,
     article_summarizer: Optional[Callable[[Article], Dict[str, str]]] = None,
     social_post_summarizer: Optional[Callable[[SocialPost], Dict[str, str]]] = None,
+    article_output_limit: Optional[int] = None,
+    social_post_output_limit: Optional[int] = None,
 ) -> BriefingPayload:
     items: List[BriefingItem] = []
+    article_output_count = 0
+    social_post_output_count = 0
 
     for article in articles:
+        if _limit_reached(article_output_count, article_output_limit):
+            break
         article_summary = _summarize_article(article, article_summarizer)
         if article_summary is None:
             continue
         if _is_low_quality_summary(article_summary):
             continue
-        category = normalize_category(article_summary["category"])
+        category = _article_category(article, article_summary["category"])
         items.append(
             BriefingItem(
-                section="top_stories",
+                section=_article_section(article),
                 headline_ko=article_summary["headline_ko"],
                 body_ko=article_summary["body_ko"],
                 category=category,
@@ -52,10 +58,15 @@ def build_briefing_payload(
                 source_urls=_article_source_urls(article),
                 source_names=_article_source_names(article),
                 source_type="article",
+                published_at=article.published_at,
+                event_at=article.event_at,
             )
         )
+        article_output_count += 1
 
     for post in social_posts:
+        if _limit_reached(social_post_output_count, social_post_output_limit):
+            break
         if _is_low_signal_social_post(post):
             continue
         social_summary = _summarize_social_post(post, social_post_summarizer)
@@ -76,8 +87,10 @@ def build_briefing_payload(
                 source_urls=[post.url],
                 source_names=[post.source_name],
                 source_type="social_post",
+                published_at=post.published_at,
             )
         )
+        social_post_output_count += 1
 
     return BriefingPayload(
         team_slug=team_slug,
@@ -105,6 +118,20 @@ def _article_source_urls(article: Article) -> List[str]:
 
 def _article_source_names(article: Article) -> List[str]:
     return article.source_names or [article.source_name]
+
+
+def _article_section(article: Article) -> str:
+    return "match_schedule" if article.event_at is not None else "top_stories"
+
+
+def _article_category(article: Article, category: str) -> str:
+    if article.event_at is not None:
+        return "match_preview"
+    return normalize_category(category)
+
+
+def _limit_reached(count: int, limit: Optional[int]) -> bool:
+    return limit is not None and count >= max(limit, 0)
 
 
 def _summarize_article(

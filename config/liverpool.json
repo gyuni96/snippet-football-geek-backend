@@ -1,0 +1,53 @@
+{
+  "filters": {
+    "official_website_excluded_terms": [
+      "greatest",
+      "goal-season",
+      "goal of the season",
+      "competition",
+      "win-liverpool-shirt",
+      "season-player-review",
+      "women",
+      "women's",
+      "lfc-women",
+      "lfc women"
+    ],
+    "liverpool_subject_terms": [
+      "arne slot",
+      "slot",
+      "andoni iraola",
+      "iraola",
+      "jurgen klopp",
+      "klopp",
+      "mohamed salah",
+      "salah",
+      "virgil van dijk",
+      "van dijk",
+      "alisson",
+      "dominik szoboszlai",
+      "szoboszlai",
+      "alexis mac allister",
+      "mac allister",
+      "andy robertson",
+      "robertson",
+      "ibrahima konate",
+      "konate",
+      "rio ngumoha",
+      "ngumoha",
+      "richard hughes",
+      "michael edwards"
+    ],
+    "womens_team_terms": [
+      "liverpool fc women",
+      "lfc women",
+      "women's team",
+      "women team",
+      "women midfielder",
+      "women forward",
+      "women goalkeeper",
+      "barclays women's super league",
+      "women's super league",
+      "wsl"
+    ]
+  }
+}

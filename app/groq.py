@@ -106,7 +106,7 @@ class GroqModelRouter:
             return False
         previous_model = self.current_model
         self.current_index += 1
-        message = f"Groq model fallback: {previous_model} -> {self.current_model} (daily token limit reached)."
+        message = f"{previous_model} 일일 토큰 한도 초과로 {self.current_model} 모델로 전환했습니다."
         if self.on_switch is not None:
             self.on_switch(message)
         return True

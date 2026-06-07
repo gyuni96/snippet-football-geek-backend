@@ -105,7 +105,37 @@ class DiscordNotificationTest(unittest.TestCase):
         fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
         self.assertEqual(
             fields["⚠️ Groq 상태"],
-            "⚠️ Groq daily token limit has been reached; skipping remaining Groq requests.",
+            "⚠️ Groq 일일 토큰 한도 초과로 남은 요약 요청을 건너뜁니다.",
+        )
+
+    def test_builds_collection_debug_field_when_counts_are_provided(self):
+        message = build_discord_run_message(
+            team_slug="liverpool",
+            briefing_type="morning",
+            status="warning",
+            source_keys=["all"],
+            payload=None,
+            briefing_id=None,
+            collection_counts={
+                "raw_item_count": 42,
+                "fresh_item_count": 30,
+                "relevant_article_count": 18,
+                "relevant_social_post_count": 7,
+                "article_candidate_count": 12,
+                "social_post_candidate_count": 6,
+                "article_output_count": 9,
+                "social_post_output_count": 5,
+            },
+        )
+
+        fields = {field["name"]: field["value"] for field in message["embeds"][0]["fields"]}
+        self.assertEqual(
+            fields["📊 수집 흐름"],
+            "원본 42개 → 최신 30개\n"
+            "관련성 통과: 기사 18개 / X 7개\n"
+            "요약 후보: 기사 12개 / X 6개\n"
+            "저장 대상: 기사 9개 / X 5개\n"
+            "제외/미사용: 기사 3개 / X 1개",
         )
 
     def test_builds_groq_model_field_when_model_tracking_exists(self):

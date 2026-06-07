@@ -46,6 +46,8 @@ class SupabaseClientTest(unittest.TestCase):
                     source_urls=["https://example.com/news"],
                     source_names=["Liverpool Echo"],
                     source_type="article",
+                    published_at=datetime(2026, 6, 6, 8, 10, tzinfo=timezone.utc),
+                    event_at=datetime(2026, 8, 2, 20, 0, tzinfo=timezone.utc),
                 )
             ],
         )
@@ -68,6 +70,8 @@ class SupabaseClientTest(unittest.TestCase):
         self.assertEqual(requests[1]["body"][0]["sort_order"], 0)
         self.assertEqual(requests[1]["body"][0]["item_type"], "article")
         self.assertEqual(requests[1]["body"][0]["category"], "transfer")
+        self.assertEqual(requests[1]["body"][0]["published_at"], "2026-06-06T08:10:00+00:00")
+        self.assertEqual(requests[1]["body"][0]["event_at"], "2026-08-02T20:00:00+00:00")
 
     def test_fetch_latest_briefing_published_at_reads_most_recent_row(self):
         requests = []

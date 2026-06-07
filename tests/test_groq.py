@@ -556,7 +556,7 @@ class GroqTest(unittest.TestCase):
         self.assertEqual(router.current_model, "fallback-model")
         self.assertEqual(
             switch_messages,
-            ["Groq model fallback: primary-model -> fallback-model (daily token limit reached)."],
+            ["primary-model 일일 토큰 한도 초과로 fallback-model 모델로 전환했습니다."],
         )
 
     def test_default_groq_fallback_models_exclude_8b_test_model(self):

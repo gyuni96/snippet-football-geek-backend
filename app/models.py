@@ -20,6 +20,7 @@ class RawItem:
     title: str
     text: str
     published_at: datetime
+    event_at: Optional[datetime] = None
     author: Optional[str] = None
     raw_payload: Dict[str, Any] = field(default_factory=dict)
 
@@ -34,6 +35,7 @@ class Article:
     body: str
     published_at: datetime
     author: Optional[str] = None
+    event_at: Optional[datetime] = None
     source_urls: List[str] = field(default_factory=list)
     source_names: List[str] = field(default_factory=list)
 
@@ -62,6 +64,8 @@ class BriefingItem:
     source_urls: List[str]
     source_names: List[str]
     source_type: str
+    published_at: Optional[datetime] = None
+    event_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -75,6 +79,8 @@ class BriefingItem:
             "source_urls": self.source_urls,
             "source_names": self.source_names,
             "source_type": self.source_type,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "event_at": self.event_at.isoformat() if self.event_at else None,
         }
 
 

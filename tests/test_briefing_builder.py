@@ -46,12 +46,14 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].confidence_label, "reported")
         self.assertEqual(payload.items[0].source_names, ["Liverpool Echo"])
         self.assertEqual(payload.items[0].source_type, "article")
+        self.assertEqual(payload.items[0].published_at, published_at)
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
         self.assertEqual(payload.items[1].section, "reporter_signals")
         self.assertEqual(payload.items[1].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[1].source_names, ["James Pearce"])
         self.assertEqual(payload.items[1].source_type, "social_post")
+        self.assertEqual(payload.items[1].published_at, published_at)
         self.assertEqual(payload.items[1].category, "transfer")
         self.assertEqual(payload.items[1].category_label_ko, "이적")
 
@@ -190,6 +192,79 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
+
+    def test_builds_match_schedule_item_when_article_has_event_at(self):
+        published_at = datetime(2026, 6, 7, 3, 0, tzinfo=timezone.utc)
+        event_at = datetime(2026, 8, 2, 20, 0, tzinfo=timezone.utc)
+        article = Article(
+            team_slug="liverpool",
+            source_name="Sky Sports - Liverpool",
+            external_id="fixture-1",
+            canonical_url="https://www.skysports.com/football/liverpool-vs-leeds-united/554987",
+            title="Liverpool vs Leeds United",
+            body="Liverpool vs Leeds United. Friendly Match.",
+            published_at=published_at,
+            event_at=event_at,
+        )
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=[article],
+            social_posts=[],
+            published_at=published_at,
+        )
+
+        self.assertEqual(payload.items[0].section, "match_schedule")
+        self.assertEqual(payload.items[0].category, "match_preview")
+        self.assertEqual(payload.items[0].category_label_ko, "경기 프리뷰")
+        self.assertEqual(payload.items[0].published_at, published_at)
+        self.assertEqual(payload.items[0].event_at, event_at)
+
+    def test_applies_output_limit_after_summary_quality_filtering(self):
+        published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
+        articles = [
+            Article(
+                team_slug="liverpool",
+                source_name="Liverpool Echo",
+                external_id=f"article-{index}",
+                canonical_url=f"https://example.com/article-{index}",
+                title=f"Liverpool transfer update {index}",
+                body=f"Liverpool transfer body {index}.",
+                published_at=published_at,
+            )
+            for index in range(4)
+        ]
+        summarized_ids = []
+
+        def fake_summarizer(article):
+            summarized_ids.append(article.external_id)
+            if article.external_id == "article-0":
+                return {
+                    "headline_ko": "리버풀 관련 소식",
+                    "body_ko": "Liverpool Echo가 관련 소식을 전했습니다.",
+                    "confidence_label": "reported",
+                    "category": "transfer",
+                }
+            return {
+                "headline_ko": f"요약 {article.external_id}",
+                "body_ko": "실제 내용을 바탕으로 한 리버풀 요약입니다.",
+                "confidence_label": "reported",
+                "category": "transfer",
+            }
+
+        payload = build_briefing_payload(
+            team_slug="liverpool",
+            briefing_type="morning",
+            articles=articles,
+            social_posts=[],
+            published_at=published_at,
+            article_summarizer=fake_summarizer,
+            article_output_limit=2,
+        )
+
+        self.assertEqual([item.headline_ko for item in payload.items], ["요약 article-1", "요약 article-2"])
+        self.assertEqual(summarized_ids, ["article-0", "article-1", "article-2"])
 
     def test_skips_article_when_summarizer_fails(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)

@@ -36,6 +36,8 @@ class SourcesTest(unittest.TestCase):
         )
         self.assertIn("greatest", get_source("official_website").listing_excluded_terms)
         self.assertIn("competition", get_source("official_website").listing_excluded_terms)
+        self.assertIn("women", get_source("official_website").listing_excluded_terms)
+        self.assertIn("lfc-women", get_source("official_website").listing_excluded_terms)
         self.assertEqual(
             get_source("sky_sports_liverpool").listing_url,
             "https://www.skysports.com/liverpool",

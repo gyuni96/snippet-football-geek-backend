@@ -7,6 +7,7 @@ create extension if not exists pgcrypto;
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
     new.updated_at = now();
@@ -46,13 +47,15 @@ create table if not exists public.briefing_items (
     source_count integer not null default 1,
     source_urls text[] not null default '{}',
     source_names text[] not null default '{}',
+    published_at timestamptz,
+    event_at timestamptz,
     created_at timestamptz not null default now(),
     constraint briefing_items_sort_order_check
         check (sort_order >= 0),
     constraint briefing_items_source_count_check
         check (source_count >= 1),
     constraint briefing_items_section_check
-        check (section in ('top_stories', 'reporter_signals')),
+        check (section in ('top_stories', 'reporter_signals', 'match_schedule')),
     constraint briefing_items_category_check
         check (category in ('transfer', 'injury', 'match_result', 'match_preview', 'team_news', 'official', 'rumor', 'etc')),
     constraint briefing_items_item_type_check
@@ -104,8 +107,17 @@ create index if not exists idx_briefing_items_category
 create index if not exists idx_briefing_items_item_type
     on public.briefing_items (item_type);
 
+create index if not exists idx_briefing_items_published_at
+    on public.briefing_items (briefing_id, published_at desc nulls last, sort_order);
+
+create index if not exists idx_briefing_items_event_at
+    on public.briefing_items (briefing_id, event_at desc nulls last, published_at desc nulls last, sort_order);
+
 create index if not exists idx_collector_runs_team_created_at
     on public.collector_runs (team_slug, created_at desc);
+
+create index if not exists idx_collector_runs_briefing_id
+    on public.collector_runs (briefing_id);
 
 create index if not exists idx_collector_runs_status_created_at
     on public.collector_runs (status, created_at desc);

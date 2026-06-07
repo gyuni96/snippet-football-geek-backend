@@ -25,6 +25,8 @@ class BriefingPayloadTest(unittest.TestCase):
                     source_type="article",
                     category="transfer",
                     category_label_ko="이적",
+                    published_at=published_at,
+                    event_at=datetime(2026, 8, 2, 20, 0, tzinfo=timezone.utc),
                 )
             ],
         )
@@ -49,6 +51,8 @@ class BriefingPayloadTest(unittest.TestCase):
                         "source_type": "article",
                         "category": "transfer",
                         "category_label_ko": "이적",
+                        "published_at": "2026-06-06T07:30:00+00:00",
+                        "event_at": "2026-08-02T20:00:00+00:00",
                     }
                 ],
             },
