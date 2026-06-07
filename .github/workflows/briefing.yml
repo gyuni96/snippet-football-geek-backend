@@ -85,16 +85,17 @@ jobs:
           LIMIT="${{ github.event.inputs.limit || '' }}"
           USE_GROQ="${{ github.event.inputs.use_groq || 'true' }}"
           GROQ_MODEL="${{ github.event.inputs.groq_model || 'llama-3.3-70b-versatile' }}"
+          SCHEDULE_CRON="${{ github.event.schedule || '' }}"
 
           if [ -z "$BRIEFING_TYPE" ]; then
-            case "$(date -u +%H)" in
-              20)
+            case "$SCHEDULE_CRON" in
+              "0 20 * * *")
                 BRIEFING_TYPE="morning"
                 ;;
-              07)
+              "0 7 * * *")
                 BRIEFING_TYPE="afternoon"
                 ;;
-              13)
+              "0 13 * * *")
                 BRIEFING_TYPE="evening"
                 ;;
               *)

@@ -268,6 +268,7 @@ MVP 저장 구조는 `briefings`와 `briefing_items` 두 테이블입니다. `br
   - `20:00 UTC`: 한국 시간 05:00 새벽/아침 브리핑
   - `07:00 UTC`: 한국 시간 16:00 오후 브리핑
   - `13:00 UTC`: 한국 시간 22:00 밤 브리핑
+- GitHub Actions 예약 실행은 정시 실행을 보장하지 않으므로 GitHub 대기열 상태에 따라 지연될 수 있습니다. 브리핑 타입은 실제 시작 시각이 아니라 `github.event.schedule` 값으로 결정해, 지연 실행돼도 원래 의도한 브리핑 타입을 유지합니다.
 - `workflow_dispatch`로 수동 실행할 수 있습니다.
 - 기본 실행은 `all` 소스에서 수집 사이 올라온 새 소식을 모두 처리하고, Twikit provider로 X 지정 계정 수집을 함께 시도합니다.
 - `GROQ_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`는 GitHub Repository secrets에 등록해야 합니다.
