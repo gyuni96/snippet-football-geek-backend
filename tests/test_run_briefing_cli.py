@@ -407,8 +407,8 @@ class RunBriefingCliTest(unittest.TestCase):
             factory.call_args.kwargs["model_router"].models,
             [
                 "test-model",
-                "meta-llama/llama-4-scout-17b-16e-instruct",
                 "qwen/qwen3-32b",
+                "llama-3.3-70b-versatile",
             ],
         )
         guard = factory.call_args.kwargs["usage_guard"]

@@ -74,7 +74,25 @@ def save_briefing_payload(payload: BriefingPayload, client: SupabaseClient) -> s
     )
     briefing_id = briefing_rows[0]["id"]
 
-    if payload.items:
+    if payload.article_items:
+        client.post(
+            "briefing_articles",
+            [
+                _briefing_article_row(payload.team_slug, briefing_id, index, item.to_dict())
+                for index, item in enumerate(payload.article_items)
+            ],
+        )
+
+    if payload.tweet_items:
+        client.post(
+            "briefing_tweets",
+            [
+                _briefing_tweet_row(payload.team_slug, briefing_id, index, item.to_dict())
+                for index, item in enumerate(payload.tweet_items)
+            ],
+        )
+
+    if not payload.article_items and not payload.tweet_items and payload.items:
         client.post(
             "briefing_items",
             [
@@ -149,6 +167,51 @@ def _briefing_item_row(briefing_id: str, sort_order: int, item: Dict[str, Any]) 
         "source_names": item["source_names"],
         "published_at": item["published_at"],
         "event_at": item["event_at"],
+    }
+
+
+def _briefing_article_row(team_slug: str, briefing_id: str, sort_order: int, item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "briefing_id": briefing_id,
+        "team_slug": team_slug,
+        "sort_order": sort_order,
+        "section": item["section"],
+        "headline_ko": item["headline_ko"],
+        "body_ko": item["body_ko"],
+        "category": item["category"],
+        "category_label_ko": item["category_label_ko"],
+        "confidence_label": item["confidence_label"],
+        "source_count": item["source_count"],
+        "source_urls": item["source_urls"],
+        "source_names": item["source_names"],
+        "published_at": item["published_at"],
+        "event_at": item["event_at"],
+        "llm_provider": item["llm_provider"],
+        "llm_model": item["llm_model"],
+        "raw_payload": item,
+    }
+
+
+def _briefing_tweet_row(team_slug: str, briefing_id: str, sort_order: int, item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "briefing_id": briefing_id,
+        "team_slug": team_slug,
+        "sort_order": sort_order,
+        "tweet_id": item["tweet_id"],
+        "author_handle": item["author_handle"],
+        "author_name": item["author_name"],
+        "tweet_url": item["tweet_url"],
+        "headline_ko": item["headline_ko"],
+        "body_ko": item["body_ko"],
+        "translated_text_ko": item["translated_text_ko"],
+        "original_text": item["original_text"],
+        "category": item["category"],
+        "category_label_ko": item["category_label_ko"],
+        "confidence_label": item["confidence_label"],
+        "published_at": item["published_at"],
+        "llm_provider": item["llm_provider"],
+        "llm_model": item["llm_model"],
+        "raw_payload": item,
     }
 
 

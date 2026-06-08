@@ -49,6 +49,11 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].published_at, published_at)
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
+        self.assertEqual(len(payload.article_items), 1)
+        self.assertEqual(payload.article_items[0].headline_ko, payload.items[0].headline_ko)
+        self.assertEqual(payload.article_items[0].source_names, ["Liverpool Echo"])
+        self.assertEqual(payload.article_items[0].llm_provider, "local")
+        self.assertEqual(payload.article_items[0].llm_model, "template")
         self.assertEqual(payload.items[1].section, "reporter_signals")
         self.assertEqual(payload.items[1].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[1].source_names, ["James Pearce"])
@@ -56,6 +61,14 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[1].published_at, published_at)
         self.assertEqual(payload.items[1].category, "transfer")
         self.assertEqual(payload.items[1].category_label_ko, "이적")
+        self.assertEqual(len(payload.tweet_items), 1)
+        self.assertEqual(payload.tweet_items[0].tweet_id, "post-1")
+        self.assertEqual(payload.tweet_items[0].author_handle, "JamesPearceLFC")
+        self.assertEqual(payload.tweet_items[0].tweet_url, "https://x.com/JamesPearceLFC/status/post-1")
+        self.assertEqual(payload.tweet_items[0].original_text, social_post.text)
+        self.assertIn("Liverpool are not planning", payload.tweet_items[0].translated_text_ko)
+        self.assertEqual(payload.tweet_items[0].llm_provider, "local")
+        self.assertEqual(payload.tweet_items[0].llm_model, "template")
 
     def test_builds_social_post_item_with_summarizer_when_provided(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
@@ -79,8 +92,11 @@ class BriefingBuilderTest(unittest.TestCase):
             social_post_summarizer=lambda post: {
                 "headline_ko": "Bayern, Rio Ngumoha 관심 보도 확산",
                 "body_ko": "James Pearce가 David Ornstein의 보도를 공유하며 Bayern Munich의 Rio Ngumoha 관심을 전했습니다.",
+                "translated_text_ko": "James Pearce가 David Ornstein의 Bayern Munich와 Rio Ngumoha 관련 보도를 공유했습니다.",
                 "confidence_label": "reporter_claim",
                 "category": "transfer",
+                "llm_provider": "groq",
+                "llm_model": "meta-llama/llama-4-scout-17b-16e-instruct",
             },
         )
 
@@ -88,6 +104,9 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertIn("David Ornstein", payload.items[0].body_ko)
         self.assertEqual(payload.items[0].confidence_label, "reporter_claim")
         self.assertEqual(payload.items[0].category, "transfer")
+        self.assertEqual(payload.tweet_items[0].translated_text_ko, "James Pearce가 David Ornstein의 Bayern Munich와 Rio Ngumoha 관련 보도를 공유했습니다.")
+        self.assertEqual(payload.tweet_items[0].llm_provider, "groq")
+        self.assertEqual(payload.tweet_items[0].llm_model, "meta-llama/llama-4-scout-17b-16e-instruct")
 
     def test_skips_social_post_when_summarizer_fails(self):
         published_at = datetime(2026, 6, 6, 8, 0, tzinfo=timezone.utc)
@@ -185,6 +204,8 @@ class BriefingBuilderTest(unittest.TestCase):
                 "body_ko": "여름 이적시장을 앞두고 체크할 만한 흐름입니다.",
                 "confidence_label": "reported",
                 "category": "transfer",
+                "llm_provider": "groq",
+                "llm_model": "meta-llama/llama-4-scout-17b-16e-instruct",
             },
         )
 
@@ -192,6 +213,8 @@ class BriefingBuilderTest(unittest.TestCase):
         self.assertEqual(payload.items[0].body_ko, "여름 이적시장을 앞두고 체크할 만한 흐름입니다.")
         self.assertEqual(payload.items[0].category, "transfer")
         self.assertEqual(payload.items[0].category_label_ko, "이적")
+        self.assertEqual(payload.article_items[0].llm_provider, "groq")
+        self.assertEqual(payload.article_items[0].llm_model, "meta-llama/llama-4-scout-17b-16e-instruct")
 
     def test_builds_match_schedule_item_when_article_has_event_at(self):
         published_at = datetime(2026, 6, 7, 3, 0, tzinfo=timezone.utc)

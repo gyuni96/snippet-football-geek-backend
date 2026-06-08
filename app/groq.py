@@ -16,10 +16,10 @@ from app.categories import normalize_category
 from app.models import Article, SocialPost
 
 
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 DEFAULT_GROQ_FALLBACK_MODELS = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",
     "qwen/qwen3-32b",
+    "llama-3.3-70b-versatile",
 ]
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 ARTICLE_BODY_PROMPT_LIMIT = 1200
@@ -130,6 +130,10 @@ class GroqClient:
         self.rate_limiter = rate_limiter
         self.usage_guard = usage_guard
 
+    @property
+    def current_model(self) -> str:
+        return self.model_router.current_model
+
     def chat_json(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         while True:
             try:
@@ -238,6 +242,7 @@ def summarize_social_post_with_groq(post: SocialPost, client: GroqClient) -> Dic
             result = {
                 "headline_ko": str(summary["headline_ko"]),
                 "body_ko": str(summary["body_ko"]),
+                "translated_text_ko": str(summary["translated_text_ko"]),
                 "confidence_label": _normalize_social_confidence_label(str(summary.get("confidence_label", "reporter_claim"))),
                 "category": normalize_category(str(summary.get("category", "etc"))),
             }
@@ -260,9 +265,10 @@ def _social_post_summary_messages(post: SocialPost) -> List[Dict[str, str]]:
                 "You are a Korean football editor writing concise Liverpool fan briefings from X posts. "
                 f"{BRIEFING_STYLE_GUIDE}"
                 "Return valid JSON only, no markdown, no extra text. "
-                "Schema: {\"headline_ko\":\"...\",\"body_ko\":\"...\",\"confidence_label\":\"reporter_claim\",\"category\":\"transfer\"}. "
+                "Schema: {\"headline_ko\":\"...\",\"body_ko\":\"...\",\"translated_text_ko\":\"...\",\"confidence_label\":\"reporter_claim\",\"category\":\"transfer\"}. "
                 "headline_ko: concrete news/event headline, not a source label. Never use generic headlines like 기자 신호, 리버풀 관련 소식, 새 소식 없음, 원문 확인 필요. "
                 "body_ko: one compact Korean sentence explaining who posted it and what was claimed or shared. "
+                "translated_text_ko: Korean translation of the meaningful tweet text only, preserving proper names in Latin spelling. "
                 "Clean retweets, mentions, emojis, tracking links, and line breaks. Do not quote the full tweet. "
                 "If the post is only an emoji, reaction, vague reply, or bare link, use category etc and describe it as a weak social signal. "
                 "Keep proper names in Latin spelling: players, clubs, managers, journalists, publications. "
@@ -317,8 +323,9 @@ def _social_post_retry_messages(post: SocialPost) -> List[Dict[str, str]]:
             "content": (
                 "Return JSON only. Write one concise Korean Liverpool briefing item from this X post. "
                 f"{BRIEFING_STYLE_GUIDE}"
-                "Keys: headline_ko, body_ko, confidence_label, category. "
+                "Keys: headline_ko, body_ko, translated_text_ko, confidence_label, category. "
                 "Do not use generic headlines like '~관련 X 소식', '기자 신호', or '리버풀 관련 소식'. "
+                "translated_text_ko must be a Korean translation of the meaningful tweet text, not another summary. "
                 "If the post has no concrete claim, set category to etc and write that it is a weak signal. "
                 "Do not quote the full post. Keep proper names in Latin letters. "
                 "confidence_label: official, reporter_claim, rumor, unconfirmed. "
@@ -436,7 +443,11 @@ def _ensure_article_summary_quality(summary: Dict[str, str]) -> None:
 
 
 def _ensure_social_post_summary_quality(summary: Dict[str, str]) -> None:
-    if _contains_disallowed_script(summary["headline_ko"]) or _contains_disallowed_script(summary["body_ko"]):
+    if (
+        _contains_disallowed_script(summary["headline_ko"])
+        or _contains_disallowed_script(summary["body_ko"])
+        or _contains_disallowed_script(summary.get("translated_text_ko", ""))
+    ):
         raise GroqAPIError("Groq social post summary failed quality checks.")
     if _has_generic_social_headline(summary["headline_ko"]) or _has_generic_social_body(summary["body_ko"]):
         raise GroqAPIError("Groq social post summary failed quality checks.")
@@ -481,7 +492,9 @@ def _restore_known_proper_names(summary: Dict[str, str]) -> Dict[str, str]:
         "리버풀 에코": "Liverpool Echo",
     }
     restored = dict(summary)
-    for key in ("headline_ko", "body_ko"):
+    for key in ("headline_ko", "body_ko", "translated_text_ko"):
+        if key not in restored:
+            continue
         value = restored[key]
         for korean_name, latin_name in replacements.items():
             value = value.replace(korean_name, latin_name)

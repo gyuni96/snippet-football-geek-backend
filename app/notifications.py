@@ -58,15 +58,15 @@ def build_discord_run_message(
     collection_counts: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     items = payload.items if payload is not None else []
-    article_count = sum(1 for item in items if item.source_type == "article")
-    social_post_count = sum(1 for item in items if item.source_type == "social_post")
+    article_count = _payload_article_count(payload)
+    social_post_count = _payload_tweet_count(payload)
     status_meta = _notification_status_meta(status)
     fields = [
         {"name": "팀", "value": team_slug, "inline": True},
         {"name": "브리핑", "value": briefing_type, "inline": True},
         {
             "name": "항목",
-            "value": f"총 {len(items)}개 / 기사 {article_count}개 / X {social_post_count}개",
+            "value": f"총 {article_count + social_post_count}개 / 기사 {article_count}개 / X {social_post_count}개",
             "inline": False,
         },
     ]
@@ -124,6 +124,22 @@ def _build_groq_model_field(
     if fallback_models:
         lines.append(f"fallback: {', '.join(fallback_models)}")
     return _trim_discord_field("\n".join(lines))
+
+
+def _payload_article_count(payload: Optional[BriefingPayload]) -> int:
+    if payload is None:
+        return 0
+    if payload.article_items:
+        return len(payload.article_items)
+    return sum(1 for item in payload.items if item.source_type == "article")
+
+
+def _payload_tweet_count(payload: Optional[BriefingPayload]) -> int:
+    if payload is None:
+        return 0
+    if payload.tweet_items:
+        return len(payload.tweet_items)
+    return sum(1 for item in payload.items if item.source_type == "social_post")
 
 
 def _build_collection_debug_field(collection_counts: Dict[str, int]) -> Optional[str]:

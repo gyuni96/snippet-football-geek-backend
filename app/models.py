@@ -85,6 +85,76 @@ class BriefingItem:
 
 
 @dataclass(frozen=True)
+class ArticleBriefingItem:
+    section: str
+    headline_ko: str
+    body_ko: str
+    category: str
+    category_label_ko: str
+    source_count: int
+    confidence_label: str
+    source_urls: List[str]
+    source_names: List[str]
+    published_at: Optional[datetime] = None
+    event_at: Optional[datetime] = None
+    llm_provider: str = "local"
+    llm_model: str = "template"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "section": self.section,
+            "headline_ko": self.headline_ko,
+            "body_ko": self.body_ko,
+            "category": self.category,
+            "category_label_ko": self.category_label_ko,
+            "source_count": self.source_count,
+            "confidence_label": self.confidence_label,
+            "source_urls": self.source_urls,
+            "source_names": self.source_names,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "event_at": self.event_at.isoformat() if self.event_at else None,
+            "llm_provider": self.llm_provider,
+            "llm_model": self.llm_model,
+        }
+
+
+@dataclass(frozen=True)
+class TweetBriefingItem:
+    headline_ko: str
+    body_ko: str
+    translated_text_ko: str
+    original_text: str
+    category: str
+    category_label_ko: str
+    confidence_label: str
+    tweet_id: str
+    author_handle: str
+    author_name: str
+    tweet_url: str
+    published_at: datetime
+    llm_provider: str = "local"
+    llm_model: str = "template"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "headline_ko": self.headline_ko,
+            "body_ko": self.body_ko,
+            "translated_text_ko": self.translated_text_ko,
+            "original_text": self.original_text,
+            "category": self.category,
+            "category_label_ko": self.category_label_ko,
+            "confidence_label": self.confidence_label,
+            "tweet_id": self.tweet_id,
+            "author_handle": self.author_handle,
+            "author_name": self.author_name,
+            "tweet_url": self.tweet_url,
+            "published_at": self.published_at.isoformat(),
+            "llm_provider": self.llm_provider,
+            "llm_model": self.llm_model,
+        }
+
+
+@dataclass(frozen=True)
 class BriefingPayload:
     team_slug: str
     briefing_type: str
@@ -92,6 +162,8 @@ class BriefingPayload:
     summary_ko: str
     published_at: datetime
     items: List[BriefingItem]
+    article_items: List[ArticleBriefingItem] = field(default_factory=list)
+    tweet_items: List[TweetBriefingItem] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -101,4 +173,6 @@ class BriefingPayload:
             "summary_ko": self.summary_ko,
             "published_at": self.published_at.isoformat(),
             "items": [item.to_dict() for item in self.items],
+            "article_items": [item.to_dict() for item in self.article_items],
+            "tweet_items": [item.to_dict() for item in self.tweet_items],
         }

@@ -5,6 +5,7 @@ from io import BytesIO
 
 from app.groq import (
     DEFAULT_GROQ_FALLBACK_MODELS,
+    DEFAULT_GROQ_MODEL,
     GroqAPIError,
     GroqClient,
     GroqModelRouter,
@@ -218,6 +219,7 @@ class GroqTest(unittest.TestCase):
             {
                 "headline_ko": "Bayern, Rio Ngumoha 관심 보도 확산",
                 "body_ko": "James Pearce가 David Ornstein의 보도를 공유하며 Bayern Munich의 Rio Ngumoha 관심을 전했습니다.",
+                "translated_text_ko": "James Pearce가 David Ornstein의 Bayern Munich와 Rio Ngumoha 관련 보도를 공유했습니다.",
                 "confidence_label": "reporter_claim",
                 "category": "transfer",
             }
@@ -226,8 +228,10 @@ class GroqTest(unittest.TestCase):
         summary = summarize_social_post_with_groq(post, client)
 
         self.assertEqual(summary["headline_ko"], "Bayern, Rio Ngumoha 관심 보도 확산")
+        self.assertEqual(summary["translated_text_ko"], "James Pearce가 David Ornstein의 Bayern Munich와 Rio Ngumoha 관련 보도를 공유했습니다.")
         self.assertEqual(summary["confidence_label"], "reporter_claim")
         self.assertEqual(summary["category"], "transfer")
+        self.assertIn("translated_text_ko", client.messages[0]["content"])
         self.assertIn("Clean retweets", client.messages[0]["content"])
         self.assertIn("Do not quote the full tweet", client.messages[0]["content"])
         self.assertIn("Return valid JSON only", client.messages[0]["content"])
@@ -252,6 +256,7 @@ class GroqTest(unittest.TestCase):
             {
                 "headline_ko": "제임스 피어스, 리오 응구모하 관련 보도 공유",
                 "body_ko": "제임스 피어스가 데이비드 오르니스타인의 보도를 공유하며 리오 응구모하 관련 흐름을 전했습니다. 피에데리코 키에사와 파브리치오 로마노, 슬롯과 이라올라, 팔리스, 레버쿠젠도 언급됐습니다.",
+                "translated_text_ko": "제임스 피어스가 데이비드 오르니스타인의 리오 응구모하 보도를 공유했습니다.",
                 "confidence_label": "reporter_claim",
                 "category": "transfer",
             }
@@ -264,6 +269,9 @@ class GroqTest(unittest.TestCase):
         self.assertIn("James Pearce", summary["body_ko"])
         self.assertIn("David Ornstein", summary["body_ko"])
         self.assertIn("Rio Ngumoha", summary["body_ko"])
+        self.assertIn("James Pearce", summary["translated_text_ko"])
+        self.assertIn("David Ornstein", summary["translated_text_ko"])
+        self.assertIn("Rio Ngumoha", summary["translated_text_ko"])
         self.assertIn("Federico Chiesa", summary["body_ko"])
         self.assertIn("Fabrizio Romano", summary["body_ko"])
         self.assertIn("Arne Slot", summary["body_ko"])
@@ -286,6 +294,7 @@ class GroqTest(unittest.TestCase):
             {
                 "headline_ko": "LFCTransferRoom 기자 신호",
                 "body_ko": "LFCTransferRoom가 X에서 리버풀 관련 소식을 공유했습니다. 원문 확인이 필요합니다.",
+                "translated_text_ko": "Federico Chiesa가 Liverpool 이탈 가능성을 열었습니다.",
                 "confidence_label": "reporter_claim",
                 "category": "transfer",
             }
@@ -310,12 +319,14 @@ class GroqTest(unittest.TestCase):
                 {
                     "headline_ko": "Federico Chiesa 관련 X 소식",
                     "body_ko": "LFCTransferRoom가 X에서 Federico Chiesa 관련 리버풀 소식을 전했습니다.",
+                    "translated_text_ko": "Federico Chiesa가 Liverpool 이탈 가능성을 열었습니다.",
                     "confidence_label": "reporter_claim",
                     "category": "transfer",
                 },
                 {
                     "headline_ko": "Federico Chiesa, 리버풀 이탈 가능성 언급",
                     "body_ko": "LFCTransferRoom은 Federico Chiesa가 리버풀을 떠날 가능성을 열어뒀다고 전했습니다.",
+                    "translated_text_ko": "Federico Chiesa가 Liverpool을 떠날 가능성을 열어뒀다는 게시물입니다.",
                     "confidence_label": "reporter_claim",
                     "category": "transfer",
                 },
@@ -325,6 +336,7 @@ class GroqTest(unittest.TestCase):
         summary = summarize_social_post_with_groq(post, client)
 
         self.assertEqual(summary["headline_ko"], "Federico Chiesa, 리버풀 이탈 가능성 언급")
+        self.assertEqual(summary["translated_text_ko"], "Federico Chiesa가 Liverpool을 떠날 가능성을 열어뒀다는 게시물입니다.")
         self.assertEqual(len(client.message_calls), 2)
         self.assertIn("Do not use generic headlines", client.message_calls[1][0]["content"])
 
@@ -343,6 +355,7 @@ class GroqTest(unittest.TestCase):
             {
                 "headline_ko": "새 소식 없음",
                 "body_ko": "LFCTransferRoom이 새 소식을 공유하지 않음",
+                "translated_text_ko": "새 소식 없음",
                 "confidence_label": "reporter_claim",
                 "category": "etc",
             }
@@ -560,11 +573,12 @@ class GroqTest(unittest.TestCase):
         )
 
     def test_default_groq_fallback_models_exclude_8b_test_model(self):
+        self.assertEqual(DEFAULT_GROQ_MODEL, "meta-llama/llama-4-scout-17b-16e-instruct")
         self.assertEqual(
             DEFAULT_GROQ_FALLBACK_MODELS,
             [
-                "meta-llama/llama-4-scout-17b-16e-instruct",
                 "qwen/qwen3-32b",
+                "llama-3.3-70b-versatile",
             ],
         )
         self.assertNotIn("llama-3.1-8b-instant", DEFAULT_GROQ_FALLBACK_MODELS)

@@ -104,9 +104,12 @@ class PipelineDiagnostics:
             self.groq_issue_messages.append(message)
 
     def record_payload_counts(self, payload) -> None:
-        items = payload.items if payload is not None else []
-        self.article_output_count = sum(1 for item in items if item.source_type == "article")
-        self.social_post_output_count = sum(1 for item in items if item.source_type == "social_post")
+        if payload is None:
+            self.article_output_count = 0
+            self.social_post_output_count = 0
+            return
+        self.article_output_count = len(payload.article_items) if payload.article_items else sum(1 for item in payload.items if item.source_type == "article")
+        self.social_post_output_count = len(payload.tweet_items) if payload.tweet_items else sum(1 for item in payload.items if item.source_type == "social_post")
 
     def to_collection_counts(self) -> Dict[str, int]:
         return {
@@ -679,7 +682,10 @@ def _summarize_article_with_groq_diagnostics(
     diagnostics: Optional[PipelineDiagnostics],
 ) -> dict:
     try:
-        return summarize_article_with_groq(article, client)
+        summary = summarize_article_with_groq(article, client)
+        summary["llm_provider"] = "groq"
+        summary["llm_model"] = client.current_model
+        return summary
     except RuntimeError as error:
         _record_groq_issue_if_needed(error, diagnostics)
         raise
@@ -691,7 +697,10 @@ def _summarize_social_post_with_groq_diagnostics(
     diagnostics: Optional[PipelineDiagnostics],
 ) -> dict:
     try:
-        return summarize_social_post_with_groq(post, client)
+        summary = summarize_social_post_with_groq(post, client)
+        summary["llm_provider"] = "groq"
+        summary["llm_model"] = client.current_model
+        return summary
     except RuntimeError as error:
         _record_groq_issue_if_needed(error, diagnostics)
         raise
@@ -743,7 +752,7 @@ def build_supabase_client_from_env() -> SupabaseClient:
 
 
 def should_save_payload_to_supabase(payload) -> bool:
-    return bool(payload.items)
+    return bool(payload.article_items or payload.tweet_items or payload.items)
 
 
 def save_payload_to_supabase(payload, client: Optional[SupabaseClient] = None) -> str:
@@ -762,16 +771,23 @@ def save_monitoring_run(
     error_message: Optional[str] = None,
 ) -> Optional[str]:
     active_client = client or build_supabase_client_from_env()
-    items = payload.items if payload is not None else []
+    if payload is None:
+        item_count = 0
+        article_count = 0
+        social_post_count = 0
+    else:
+        article_count = len(payload.article_items) if payload.article_items else sum(1 for item in payload.items if item.source_type == "article")
+        social_post_count = len(payload.tweet_items) if payload.tweet_items else sum(1 for item in payload.items if item.source_type == "social_post")
+        item_count = article_count + social_post_count
     return save_collector_run(
         active_client,
         team_slug=team_slug,
         briefing_type=briefing_type,
         status=status,
         source_keys=source_keys,
-        item_count=len(items),
-        article_count=sum(1 for item in items if item.source_type == "article"),
-        social_post_count=sum(1 for item in items if item.source_type == "social_post"),
+        item_count=item_count,
+        article_count=article_count,
+        social_post_count=social_post_count,
         briefing_id=briefing_id,
         error_message=error_message,
     )

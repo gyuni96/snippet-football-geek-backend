@@ -1,6 +1,6 @@
 -- Snippet Football Geek Supabase schema
--- MVP는 브리핑 단위와 브리핑 항목 단위를 분리해 저장합니다.
--- 프론트엔드는 briefings를 조회한 뒤 briefing_items를 함께 읽어 카드 UI를 구성합니다.
+-- MVP는 브리핑 실행 메타데이터와 기사/X 게시물 항목을 분리해 저장합니다.
+-- briefing_items는 기존 통합 테이블로 유지하고, 새 저장은 briefing_articles/briefing_tweets를 사용합니다.
 
 create extension if not exists pgcrypto;
 
@@ -66,6 +66,81 @@ create table if not exists public.briefing_items (
         unique (briefing_id, sort_order)
 );
 
+create table if not exists public.briefing_articles (
+    id uuid primary key default gen_random_uuid(),
+    briefing_id uuid not null references public.briefings(id) on delete cascade,
+    team_slug text not null,
+    sort_order integer not null,
+    section text not null,
+    headline_ko text not null,
+    body_ko text not null,
+    category text not null,
+    category_label_ko text not null,
+    confidence_label text not null,
+    source_count integer not null default 1,
+    source_urls text[] not null default '{}',
+    source_names text[] not null default '{}',
+    published_at timestamptz,
+    event_at timestamptz,
+    llm_provider text not null default 'groq',
+    llm_model text not null,
+    raw_payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    constraint briefing_articles_team_slug_check
+        check (team_slug <> ''),
+    constraint briefing_articles_sort_order_check
+        check (sort_order >= 0),
+    constraint briefing_articles_source_count_check
+        check (source_count >= 1),
+    constraint briefing_articles_section_check
+        check (section in ('top_stories', 'match_schedule')),
+    constraint briefing_articles_category_check
+        check (category in ('transfer', 'injury', 'match_result', 'match_preview', 'team_news', 'official', 'rumor', 'etc')),
+    constraint briefing_articles_confidence_label_check
+        check (confidence_label in ('official', 'reported', 'rumor', 'unconfirmed')),
+    constraint briefing_articles_unique_order
+        unique (briefing_id, sort_order)
+);
+
+create table if not exists public.briefing_tweets (
+    id uuid primary key default gen_random_uuid(),
+    briefing_id uuid not null references public.briefings(id) on delete cascade,
+    team_slug text not null,
+    sort_order integer not null,
+    tweet_id text not null,
+    author_handle text not null,
+    author_name text not null,
+    tweet_url text not null,
+    headline_ko text not null,
+    body_ko text not null,
+    translated_text_ko text not null,
+    original_text text not null,
+    category text not null,
+    category_label_ko text not null,
+    confidence_label text not null,
+    published_at timestamptz not null,
+    llm_provider text not null default 'groq',
+    llm_model text not null,
+    raw_payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    constraint briefing_tweets_team_slug_check
+        check (team_slug <> ''),
+    constraint briefing_tweets_sort_order_check
+        check (sort_order >= 0),
+    constraint briefing_tweets_tweet_id_check
+        check (tweet_id <> ''),
+    constraint briefing_tweets_author_handle_check
+        check (author_handle <> ''),
+    constraint briefing_tweets_category_check
+        check (category in ('transfer', 'injury', 'match_result', 'match_preview', 'team_news', 'official', 'rumor', 'etc')),
+    constraint briefing_tweets_confidence_label_check
+        check (confidence_label in ('official', 'reporter_claim', 'rumor', 'unconfirmed')),
+    constraint briefing_tweets_unique_order
+        unique (briefing_id, sort_order),
+    constraint briefing_tweets_unique_tweet_in_briefing
+        unique (briefing_id, tweet_id)
+);
+
 create table if not exists public.collector_runs (
     id uuid primary key default gen_random_uuid(),
     team_slug text not null,
@@ -113,6 +188,30 @@ create index if not exists idx_briefing_items_published_at
 create index if not exists idx_briefing_items_event_at
     on public.briefing_items (briefing_id, event_at desc nulls last, published_at desc nulls last, sort_order);
 
+create index if not exists idx_briefing_articles_briefing_order
+    on public.briefing_articles (briefing_id, sort_order);
+
+create index if not exists idx_briefing_articles_team_published_at
+    on public.briefing_articles (team_slug, published_at desc nulls last, sort_order);
+
+create index if not exists idx_briefing_articles_team_event_at
+    on public.briefing_articles (team_slug, event_at desc nulls last, published_at desc nulls last, sort_order);
+
+create index if not exists idx_briefing_articles_category
+    on public.briefing_articles (category);
+
+create index if not exists idx_briefing_tweets_briefing_order
+    on public.briefing_tweets (briefing_id, sort_order);
+
+create index if not exists idx_briefing_tweets_team_published_at
+    on public.briefing_tweets (team_slug, published_at desc, sort_order);
+
+create index if not exists idx_briefing_tweets_author_published_at
+    on public.briefing_tweets (author_handle, published_at desc);
+
+create index if not exists idx_briefing_tweets_category
+    on public.briefing_tweets (category);
+
 create index if not exists idx_collector_runs_team_created_at
     on public.collector_runs (team_slug, created_at desc);
 
@@ -130,6 +229,8 @@ create trigger set_briefings_updated_at
 
 alter table public.briefings enable row level security;
 alter table public.briefing_items enable row level security;
+alter table public.briefing_articles enable row level security;
+alter table public.briefing_tweets enable row level security;
 alter table public.collector_runs enable row level security;
 
 drop policy if exists briefings_public_select on public.briefings;
@@ -146,6 +247,20 @@ create policy briefing_items_public_select
     to anon, authenticated
     using (true);
 
+drop policy if exists briefing_articles_public_select on public.briefing_articles;
+create policy briefing_articles_public_select
+    on public.briefing_articles
+    for select
+    to anon, authenticated
+    using (true);
+
+drop policy if exists briefing_tweets_public_select on public.briefing_tweets;
+create policy briefing_tweets_public_select
+    on public.briefing_tweets
+    for select
+    to anon, authenticated
+    using (true);
+
 drop policy if exists collector_runs_service_role_all on public.collector_runs;
 create policy collector_runs_service_role_all
     on public.collector_runs
@@ -153,6 +268,11 @@ create policy collector_runs_service_role_all
     to service_role
     using (true)
     with check (true);
+
+grant select on public.briefing_articles to anon, authenticated;
+grant select on public.briefing_tweets to anon, authenticated;
+grant all on public.briefing_articles to service_role;
+grant all on public.briefing_tweets to service_role;
 
 create or replace view public.latest_team_briefings
 with (security_invoker = true)

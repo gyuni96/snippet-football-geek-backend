@@ -28,15 +28,16 @@ class GithubActionsWorkflowTest(unittest.TestCase):
         self.assertNotIn("LIMIT=\"${{ github.event.inputs.limit || '5' }}\"", content)
         self.assertIn("--use-groq", content)
         self.assertIn("groq_model:", content)
-        self.assertIn("default: llama-3.3-70b-versatile", content)
+        self.assertIn("default: meta-llama/llama-4-scout-17b-16e-instruct", content)
+        self.assertIn("qwen/qwen3-32b", content)
         self.assertIn("llama-3.1-8b-instant", content)
-        self.assertIn("GROQ_MODEL=\"${{ github.event.inputs.groq_model || 'llama-3.3-70b-versatile' }}\"", content)
+        self.assertIn("GROQ_MODEL=\"${{ github.event.inputs.groq_model || 'meta-llama/llama-4-scout-17b-16e-instruct' }}\"", content)
         self.assertIn("--groq-model \"$GROQ_MODEL\"", content)
         self.assertIn("GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}", content)
         self.assertIn("GROQ_REQUESTS_PER_MINUTE: \"10\"", content)
         self.assertIn("GROQ_MAX_REQUESTS: \"60\"", content)
         self.assertIn(
-            "GROQ_FALLBACK_MODELS: \"meta-llama/llama-4-scout-17b-16e-instruct,qwen/qwen3-32b\"",
+            "GROQ_FALLBACK_MODELS: \"qwen/qwen3-32b,llama-3.3-70b-versatile\"",
             content,
         )
         self.assertIn("SUPABASE_URL: ${{ secrets.SUPABASE_URL }}", content)
